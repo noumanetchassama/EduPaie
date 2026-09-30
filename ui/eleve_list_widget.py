@@ -11,6 +11,7 @@ from services.eleve_service import EleveService
 from services.paiement_service import PaiementService
 from ui.eleve_form import EleveForm
 from ui.paiement_dialog import PaiementDialog
+from ui.eleve_detail_widget import EleveDetailWidget
 
 
 class EleveListWidget(QWidget):
@@ -74,6 +75,11 @@ class EleveListWidget(QWidget):
         self.paiement_btn.clicked.connect(self.enregistrer_paiement)
         self.paiement_btn.setEnabled(False)
         button_layout.addWidget(self.paiement_btn)
+        
+        self.detail_btn = QPushButton("Voir détails")
+        self.detail_btn.clicked.connect(self.voir_details)
+        self.detail_btn.setEnabled(False)
+        button_layout.addWidget(self.detail_btn)
         
         button_layout.addStretch()
         
@@ -190,6 +196,7 @@ class EleveListWidget(QWidget):
         self.edit_btn.setEnabled(has_selection)
         self.delete_btn.setEnabled(has_selection)
         self.paiement_btn.setEnabled(has_selection)
+        self.detail_btn.setEnabled(has_selection)
     
     def add_eleve(self):
         """Ouvre le formulaire d'ajout d'élève"""
@@ -256,3 +263,21 @@ class EleveListWidget(QWidget):
         dialog = PaiementDialog(self, eleve)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             QMessageBox.information(self, "Information", "Paiement enregistré avec succès")
+            self.load_eleves()
+    
+    def voir_details(self):
+        """Ouvre la fenêtre de détails de l'élève"""
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        
+        eleve = self.current_eleves[row]
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Détails - {eleve.nom} {eleve.prenom}")
+        dialog.setMinimumSize(800, 600)
+        
+        layout = QVBoxLayout(dialog)
+        detail_widget = EleveDetailWidget(dialog, eleve.id)
+        layout.addWidget(detail_widget)
+        
+        dialog.exec()
