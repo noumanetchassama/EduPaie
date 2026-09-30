@@ -2,8 +2,10 @@
 Fenêtre principale de l'application
 """
 
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QLabel
+from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget
 from PySide6.QtCore import Qt
+from repository.database import Database
+from ui.eleve_list_widget import EleveListWidget
 
 
 class MainWindow(QMainWindow):
@@ -14,14 +16,21 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("EduPaie - Gestion des paiements scolaires")
         self.setMinimumSize(1000, 700)
         
+        # Initialiser la base de données
+        self.db = Database()
+        self.db.initialize_schema()
+        
         # Widget central
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
         layout = QVBoxLayout(central_widget)
         
-        # Label temporaire
-        label = QLabel("EduPaie - Application en cours de développement")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setStyleSheet("font-size: 18px; font-weight: bold; padding: 20px;")
-        layout.addWidget(label)
+        # Onglets
+        self.tabs = QTabWidget()
+        
+        # Onglet Élèves
+        self.eleve_widget = EleveListWidget()
+        self.tabs.addTab(self.eleve_widget, "Élèves")
+        
+        layout.addWidget(self.tabs)
