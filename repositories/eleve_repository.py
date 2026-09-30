@@ -18,9 +18,9 @@ class EleveRepository:
         cursor = conn.cursor()
         
         cursor.execute('''
-            INSERT INTO eleves (nom, prenom, classe, annee_scolaire, montant_du)
+            INSERT INTO eleves (nom, prenom, classe_id, annee_scolaire, montant_du)
             VALUES (?, ?, ?, ?, ?)
-        ''', (eleve.nom, eleve.prenom, eleve.classe, 
+        ''', (eleve.nom, eleve.prenom, eleve.classe_id, 
               eleve.annee_scolaire, eleve.montant_du))
         
         conn.commit()
@@ -39,7 +39,7 @@ class EleveRepository:
                 id=row['id'],
                 nom=row['nom'],
                 prenom=row['prenom'],
-                classe=row['classe'],
+                classe_id=row['classe_id'],
                 annee_scolaire=row['annee_scolaire'],
                 montant_du=row['montant_du']
             )
@@ -53,14 +53,17 @@ class EleveRepository:
         cursor.execute('SELECT * FROM eleves ORDER BY nom, prenom')
         rows = cursor.fetchall()
         
-        return [Eleve(
+        return [
+            Eleve(
             id=row['id'],
             nom=row['nom'],
             prenom=row['prenom'],
-            classe=row['classe'],
+            classe_id=row['classe_id'],
             annee_scolaire=row['annee_scolaire'],
             montant_du=row['montant_du']
-        ) for row in rows]
+        ) 
+        for row in rows
+        ]
     
     def update(self, eleve: Eleve) -> bool:
         """Met à jour un élève"""
@@ -69,9 +72,9 @@ class EleveRepository:
         
         cursor.execute('''
             UPDATE eleves 
-            SET nom=?, prenom=?, classe=?, annee_scolaire=?, montant_du=?
+            SET nom=?, prenom=?, classe_id=?, annee_scolaire=?, montant_du=?
             WHERE id=?
-        ''', (eleve.nom, eleve.prenom, eleve.classe, 
+        ''', (eleve.nom, eleve.prenom, eleve.classe_id, 
               eleve.annee_scolaire, eleve.montant_du, eleve.id))
         
         conn.commit()
@@ -94,7 +97,7 @@ class EleveRepository:
         search_pattern = f'%{query}%'
         cursor.execute('''
             SELECT * FROM eleves 
-            WHERE nom LIKE ? OR prenom LIKE ? OR classe LIKE ?
+            WHERE nom LIKE ? OR prenom LIKE ? OR classe_id LIKE ?
             ORDER BY nom, prenom
         ''', (search_pattern, search_pattern, search_pattern))
         
@@ -103,37 +106,37 @@ class EleveRepository:
             id=row['id'],
             nom=row['nom'],
             prenom=row['prenom'],
-            classe=row['classe'],
+            classe_id=row['classe_id'],
             annee_scolaire=row['annee_scolaire'],
             montant_du=row['montant_du']
         ) for row in rows]
     
-    def filter_by_classe(self, classe: str) -> list[Eleve]:
+    def filter_by_classe(self, classe_id: int) -> list[Eleve]:
         """Filtre les élèves par classe"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
         
         cursor.execute('''
             SELECT * FROM eleves 
-            WHERE classe = ? 
+            WHERE classe_id = ? 
             ORDER BY nom, prenom
-        ''', (classe,))
+        ''', (classe_id,))
         
         rows = cursor.fetchall()
         return [Eleve(
             id=row['id'],
             nom=row['nom'],
             prenom=row['prenom'],
-            classe=row['classe'],
+            classe_id=row['classe_id'],
             annee_scolaire=row['annee_scolaire'],
             montant_du=row['montant_du']
         ) for row in rows]
     
-    def get_classes(self) -> list[str]:
-        """Récupère la liste des classes uniques"""
+    def get_classes(self) -> list[int]:
+        """Récupère la liste des IDs de classes uniques"""
         conn = self.db.get_connection()
         cursor = conn.cursor()
         
-        cursor.execute('SELECT DISTINCT classe FROM eleves ORDER BY classe')
+        cursor.execute('SELECT DISTINCT classe_id FROM eleves ORDER BY classe_id')
         rows = cursor.fetchall()
-        return [row['classe'] for row in rows]
+        return [row['classe_id'] for row in rows]
