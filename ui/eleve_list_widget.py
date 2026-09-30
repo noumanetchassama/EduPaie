@@ -4,11 +4,12 @@ Widget pour la liste des élèves avec recherche et filtre
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
                                 QTableWidgetItem, QPushButton, QLineEdit, 
-                                QComboBox, QMessageBox, QHeaderView)
+                                QComboBox, QMessageBox, QHeaderView, QDialog)
 from PySide6.QtCore import Qt
 from models.eleve import Eleve
 from services.eleve_service import EleveService
 from ui.eleve_form import EleveForm
+from ui.paiement_dialog import PaiementDialog
 
 
 class EleveListWidget(QWidget):
@@ -66,6 +67,11 @@ class EleveListWidget(QWidget):
         self.delete_btn.clicked.connect(self.delete_eleve)
         self.delete_btn.setEnabled(False)
         button_layout.addWidget(self.delete_btn)
+        
+        self.paiement_btn = QPushButton("Enregistrer un paiement")
+        self.paiement_btn.clicked.connect(self.enregistrer_paiement)
+        self.paiement_btn.setEnabled(False)
+        button_layout.addWidget(self.paiement_btn)
         
         button_layout.addStretch()
         
@@ -158,6 +164,7 @@ class EleveListWidget(QWidget):
         has_selection = len(self.table.selectedItems()) > 0
         self.edit_btn.setEnabled(has_selection)
         self.delete_btn.setEnabled(has_selection)
+        self.paiement_btn.setEnabled(has_selection)
     
     def add_eleve(self):
         """Ouvre le formulaire d'ajout d'élève"""
@@ -213,3 +220,14 @@ class EleveListWidget(QWidget):
                 self.load_eleves()
             except ValueError as e:
                 QMessageBox.critical(self, "Erreur", str(e))
+    
+    def enregistrer_paiement(self):
+        """Ouvre le dialogue d'enregistrement de paiement"""
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        
+        eleve = self.current_eleves[row]
+        dialog = PaiementDialog(self, eleve)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            QMessageBox.information(self, "Information", "Paiement enregistré avec succès")
