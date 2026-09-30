@@ -4,12 +4,13 @@ Widget de détail d'un élève avec historique des paiements
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                 QTableWidget, QTableWidgetItem, QPushButton, 
-                                QMessageBox, QHeaderView)
+                                QMessageBox, QHeaderView, QFileDialog)
 from PySide6.QtCore import Qt
 from models.eleve import Eleve
 from models.paiement import Paiement
 from services.eleve_service import EleveService
 from services.paiement_service import PaiementService
+from services.recu_service import RecuService
 
 
 class EleveDetailWidget(QWidget):
@@ -19,6 +20,7 @@ class EleveDetailWidget(QWidget):
         super().__init__(parent)
         self.eleve_service = EleveService()
         self.paiement_service = PaiementService()
+        self.recu_service = RecuService()
         self.eleve_id = eleve_id
         self.eleve = None
         self.setup_ui()
@@ -60,6 +62,11 @@ class EleveDetailWidget(QWidget):
         self.voir_recu_btn.clicked.connect(self.voir_recu)
         self.voir_recu_btn.setEnabled(False)
         button_layout.addWidget(self.voir_recu_btn)
+        
+        self.imprimer_recu_btn = QPushButton("Imprimer le reçu (PDF)")
+        self.imprimer_recu_btn.clicked.connect(self.imprimer_recu)
+        self.imprimer_recu_btn.setEnabled(False)
+        button_layout.addWidget(self.imprimer_recu_btn)
         
         button_layout.addStretch()
         
@@ -129,6 +136,7 @@ class EleveDetailWidget(QWidget):
         """Active/désactive les boutons selon la sélection"""
         has_selection = len(self.table.selectedItems()) > 0
         self.voir_recu_btn.setEnabled(has_selection)
+        self.imprimer_recu_btn.setEnabled(has_selection)
     
     def voir_recu(self):
         """Affiche les détails du reçu sélectionné"""
@@ -155,5 +163,36 @@ class EleveDetailWidget(QWidget):
             """
             
             QMessageBox.information(self, "Détails du reçu", message)
+        else:
+            QMessageBox.warning(self, "Erreur", "Reçu non trouvé")
+    
+    def imprimer_recu(self):
+        """Génère et ouvre le PDF du reçu sélectionné"""
+        row = self.table.currentRow()
+        if row < 0:
+            return
+        
+        numero_recu = self.table.item(row, 3).text()
+        paiement = self.paiement_service.get_paiement_by_recu(numero_recu)
+        
+        if paiement:
+            # Demander où sauvegarder le PDF
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Sauvegarder le reçu",
+                f"recu_{numero_recu}.pdf",
+                "Fichiers PDF (*.pdf)"
+            )
+            
+            if file_path:
+                try:
+                    self.recu_service.generer_recu_pdf(paiement, self.eleve, file_path)
+                    QMessageBox.information(
+                        self, 
+                        "Succès", 
+                        f"Reçu généré avec succès:\n{file_path}"
+                    )
+                except Exception as e:
+                    QMessageBox.critical(self, "Erreur", f"Erreur lors de la génération du PDF: {str(e)}")
         else:
             QMessageBox.warning(self, "Erreur", "Reçu non trouvé")
