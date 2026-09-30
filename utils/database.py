@@ -12,7 +12,7 @@ class Database:
     _instance = None
     _connection = None
     
-    def __new__(cls, db_path='edupaie.db'):
+    def __new__(cls, db_path='database/edupaie.db'):
         if cls._instance is None:
             cls._instance = super(Database, cls).__new__(cls)
             cls._instance._db_path = db_path

@@ -4,9 +4,9 @@ Fenêtre principale de l'application
 
 from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget
 from PySide6.QtCore import Qt
-from repository.database import Database
-from ui.eleve_list_widget import EleveListWidget
-from ui.dashboard_widget import DashboardWidget
+from utils.database import Database
+from ui.eleves_page import EleveListWidget
+from ui.dashboard import DashboardWidget
 
 
 class MainWindow(QMainWindow):

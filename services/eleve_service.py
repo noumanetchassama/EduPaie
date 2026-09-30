@@ -3,8 +3,8 @@ Service pour la logique métier des élèves
 """
 
 from models.eleve import Eleve
-from repository.eleve_repository import EleveRepository
-from repository.paiement_repository import PaiementRepository
+from repositories.eleve_repository import EleveRepository
+from repositories.paiement_repository import PaiementRepository
 
 
 class EleveService:

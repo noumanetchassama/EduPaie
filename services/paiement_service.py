@@ -5,8 +5,8 @@ Service pour la logique métier des paiements
 from datetime import datetime
 from models.paiement import Paiement
 from models.eleve import Eleve
-from repository.paiement_repository import PaiementRepository
-from repository.eleve_repository import EleveRepository
+from repositories.paiement_repository import PaiementRepository
+from repositories.eleve_repository import EleveRepository
 
 
 class PaiementService:

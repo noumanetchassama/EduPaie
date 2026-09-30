@@ -4,9 +4,9 @@ Crée 15+ élèves avec des paiements variés (soldés, partiels, non payés)
 """
 
 from datetime import datetime, timedelta
-from repository.database import Database
-from repository.eleve_repository import EleveRepository
-from repository.paiement_repository import PaiementRepository
+from utils.database import Database
+from repositories.eleve_repository import EleveRepository
+from repositories.paiement_repository import PaiementRepository
 from services.paiement_service import PaiementService
 
 

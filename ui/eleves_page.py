@@ -11,7 +11,7 @@ from services.eleve_service import EleveService
 from services.paiement_service import PaiementService
 from ui.eleve_form import EleveForm
 from ui.paiement_dialog import PaiementDialog
-from ui.eleve_detail_widget import EleveDetailWidget
+from ui.eleve_details import EleveDetailWidget
 
 
 class EleveListWidget(QWidget):

@@ -3,7 +3,7 @@ Repository pour la gestion des paiements (DAO)
 """
 
 from models.paiement import Paiement
-from repository.database import Database
+from utils.database import Database
 
 
 class PaiementRepository:

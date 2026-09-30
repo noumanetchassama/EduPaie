@@ -3,7 +3,7 @@ Repository pour la gestion des élèves (DAO)
 """
 
 from models.eleve import Eleve
-from repository.database import Database
+from utils.database import Database
 
 
 class EleveRepository:
