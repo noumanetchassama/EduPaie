@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
 from PySide6.QtCore import Qt
 from models.eleve import Eleve
 from services.eleve_service import EleveService
+from services.paiement_service import PaiementService
 from ui.eleve_form import EleveForm
 from ui.paiement_dialog import PaiementDialog
 
@@ -18,6 +19,7 @@ class EleveListWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.eleve_service = EleveService()
+        self.paiement_service = PaiementService()
         self.current_eleves = []
         self.setup_ui()
         self.load_eleves()
@@ -44,8 +46,8 @@ class EleveListWidget(QWidget):
         
         # Tableau des élèves
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Nom", "Prénom", "Classe", "Année", "Montant dû (€)"])
+        self.table.setColumnCount(8)
+        self.table.setHorizontalHeaderLabels(["Nom", "Prénom", "Classe", "Année", "Montant dû (€)", "Payé (€)", "Solde (€)", "Statut"])
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
@@ -100,6 +102,29 @@ class EleveListWidget(QWidget):
             self.table.setItem(row, 2, QTableWidgetItem(eleve.classe))
             self.table.setItem(row, 3, QTableWidgetItem(eleve.annee_scolaire))
             self.table.setItem(row, 4, QTableWidgetItem(f"{eleve.montant_du:.2f}"))
+            
+            # Calculer le montant payé et le solde
+            try:
+                total_paye = self.paiement_service.paiement_repo.get_total_by_eleve(eleve.id)
+                solde = eleve.montant_du - total_paye
+                statut = self.paiement_service.get_statut_paiement(eleve.id)
+            except:
+                total_paye = 0
+                solde = eleve.montant_du
+                statut = "Non payé"
+            
+            self.table.setItem(row, 5, QTableWidgetItem(f"{total_paye:.2f}"))
+            self.table.setItem(row, 6, QTableWidgetItem(f"{solde:.2f}"))
+            
+            # Statut avec couleur
+            statut_item = QTableWidgetItem(statut)
+            if statut == "Soldé":
+                statut_item.setForeground(Qt.GlobalColor.green)
+            elif statut == "Partiellement payé":
+                statut_item.setForeground(Qt.GlobalColor.darkYellow)
+            else:
+                statut_item.setForeground(Qt.GlobalColor.red)
+            self.table.setItem(row, 7, statut_item)
     
     def update_classe_filter(self):
         """Met à jour la liste des classes dans le filtre"""
