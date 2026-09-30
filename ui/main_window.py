@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QTabWidget
 from PySide6.QtCore import Qt
 from repository.database import Database
 from ui.eleve_list_widget import EleveListWidget
+from ui.dashboard_widget import DashboardWidget
 
 
 class MainWindow(QMainWindow):
@@ -28,6 +29,10 @@ class MainWindow(QMainWindow):
         
         # Onglets
         self.tabs = QTabWidget()
+        
+        # Onglet Tableau de bord
+        self.dashboard_widget = DashboardWidget()
+        self.tabs.addTab(self.dashboard_widget, "Tableau de bord")
         
         # Onglet Élèves
         self.eleve_widget = EleveListWidget()
