@@ -1,128 +1,95 @@
-# Manuel Utilisateur - EduPaie
+# Manuel utilisateur — EduPaie
 
-## Introduction
-
-EduPaie est une application de gestion des paiements scolaires qui permet de suivre les paiements des élèves, de calculer automatiquement les soldes et de générer des reçus numérotés.
+Application de gestion des paiements de scolarité. Ce manuel décrit l'utilisation quotidienne : élèves, paiements, reçus et tableau de bord.
 
 ## Démarrage
 
-### Lancement de l'application
+Lancez `python main.py` (ou `EduPaie.exe`). L'application s'ouvre sur le **Tableau de bord**. La barre latérale permet de naviguer entre :
 
-1. Double-cliquez sur `main.py` ou exécutez la commande :
-```bash
-python main.py
-```
+- **Tableau de bord** — vue d'ensemble
+- **Élèves** — gestion des inscriptions et des paiements
 
-2. La fenêtre principale s'ouvre avec deux onglets :
-   - **Tableau de bord** : vue d'ensemble et statistiques
-   - **Élèves** : gestion des élèves et des paiements
+L'année scolaire en cours est affichée en bas de la barre latérale.
 
-## Enregistrer un élève
+---
 
-1. Cliquez sur l'onglet **"Élèves"**
-2. Cliquez sur le bouton **"Ajouter un élève"**
-3. Remplissez les champs obligatoires (marqués d'un *) :
-   - **Nom** : nom de famille de l'élève
-   - **Prénom** : prénom de l'élève
-   - **Classe** : classe de l'élève (ex: 6ème A, CM2)
-   - **Année scolaire** : année en cours (ex: 2024-2025)
-   - **Montant des frais de scolarité** : montant total dû pour l'année
-4. Cliquez sur **"Enregistrer"**
+## 1. Gérer les élèves (onglet Élèves)
 
-## Modifier un élève
+### Ajouter un élève
+1. Cliquez sur **＋ Nouvel élève** (en haut à droite).
+2. Renseignez : **Nom**, **Prénom**, **Classe**, et si besoin date de naissance et coordonnées du parent.
+3. **Matricule** : laissez vide pour qu'il soit généré automatiquement (ex. `2026-6EMEA-0001`).
+4. Cliquez sur **Enregistrer**.
 
-1. Dans l'onglet **"Élèves"**, sélectionnez l'élève dans la liste
-2. Cliquez sur le bouton **"Modifier"**
-3. Modifiez les champs nécessaires
-4. Cliquez sur **"Enregistrer"**
+> Le montant des frais dus est **défini par classe** (plans de frais) et appliqué automatiquement à chaque élève de la classe.
 
-## Supprimer un élève
+### Rechercher et filtrer
+- **Recherche** : tapez un nom, un prénom ou un matricule — la liste se filtre en direct.
+- **Classe** : sélectionnez une classe dans la liste déroulante.
+- **Statut** : filtrez les élèves Soldés / Partiellement payés / Non payés.
 
-1. Dans l'onglet **"Élèves"**, sélectionnez l'élève dans la liste
-2. Cliquez sur le bouton **"Supprimer"**
-3. Confirmez la suppression
-4. **Note** : un élève ayant des paiements ne peut pas être supprimé
+Les filtres se combinent (ex. « 6ème A » + « Non payés »).
 
-## Rechercher un élève
+### Modifier / supprimer
+- Sélectionnez un élève → **Modifier**.
+- **Supprimer** demande une confirmation ; elle est **refusée** si l'élève a des paiements (les reçus émis doivent rester consultables).
 
-1. Dans l'onglet **"Élèves"**, utilisez la barre de recherche
-2. Tapez le nom, prénom ou classe recherché
-3. La liste se met à jour automatiquement
+---
 
-## Filtrer par classe
+## 2. Enregistrer un paiement
 
-1. Dans l'onglet **"Élèves"**, utilisez le menu déroulant **"Filtrer par classe"**
-2. Sélectionnez la classe souhaitée
-3. Seuls les élèves de cette classe sont affichés
+1. Sélectionnez un élève → **Enregistrer un paiement**.
+2. Le dialogue affiche le **solde restant dû** de l'élève.
+3. Saisissez le **montant** : un message indique en temps réel le solde après paiement.
+   - ⚠ **Si le montant dépasse le solde, l'enregistrement est refusé** : un paiement ne peut jamais rendre le solde négatif.
+4. Choisissez la **date** (pas de date future) et le **mode de paiement** : Espèces, Chèque, Virement, Mobile Money. Une **référence** (n° de chèque…) est optionnelle.
+5. Validez : un **numéro de reçu unique** (ex. `REC-2024-000023`) est attribué automatiquement.
 
-## Enregistrer un paiement
+---
 
-1. Dans l'onglet **"Élèves"**, sélectionnez l'élève concerné
-2. Cliquez sur le bouton **"Enregistrer un paiement"**
-3. Remplissez les champs :
-   - **Montant du paiement** : montant versé par la famille
-   - **Date du paiement** : date du versement
-   - **Mode de paiement** : Espèces, Chèque, Virement ou Mobile Money
-4. Le système affiche le **solde restant avant paiement**
-5. Si le montant dépasse le solde, un message d'erreur s'affiche
-6. Cliquez sur **"Enregistrer le paiement"**
-7. Un numéro de reçu unique est généré automatiquement
+## 3. Historique et reçus (fiche élève)
 
-## Consulter l'historique des paiements
+Double-cliquez sur un élève (ou **Voir la fiche**) :
 
-1. Dans l'onglet **"Élèves"**, sélectionnez l'élève
-2. Cliquez sur le bouton **"Voir détails"**
-3. Une fenêtre s'ouvre avec :
-   - Les informations de l'élève
-   - Le solde actuel et le statut de paiement
-   - La liste chronologique de tous les paiements
+- En-tête : identité, **statut** (badge coloré), solde / payé / total dû.
+- **Historique chronologique** : date, montant, mode, n° de reçu, **solde après paiement**, statut (Valide / Annulé).
 
-## Voir les détails d'un reçu
+Pour chaque paiement sélectionné :
 
-1. Dans la fenêtre de détails de l'élève
-2. Sélectionnez un paiement dans l'historique
-3. Cliquez sur **"Voir le reçu"**
-4. Les détails du reçu s'affichent (numéro, montant, date, mode, solde)
+| Action | Effet |
+|---|---|
+| **Voir le reçu** | Aperçu à l'écran (montant, solde après paiement…) |
+| **Télécharger le reçu (PDF)** | Enregistre le PDF à l'emplacement choisi |
+| **Imprimer le reçu** | Ouvre le PDF dans la visionneuse → impression |
+| **Annuler ce paiement…** | Motif obligatoire ; le reçu reste dans l'historique, le solde est recalculé |
 
-## Imprimer un reçu en PDF
+> Les reçus sont **réimprimables à l'identique** : le contenu est figé en base au moment de l'émission, même si l'élève change de classe ou si les tarifs évoluent.
 
-1. Dans la fenêtre de détails de l'élève
-2. Sélectionnez un paiement dans l'historique
-3. Cliquez sur **"Imprimer le reçu (PDF)"**
-4. Choisissez l'emplacement de sauvegarde
-5. Le fichier PDF est généré et peut être imprimé
+Par défaut, les reçus sont aussi enregistrés dans `~/Documents/EduPaie/Recus/`.
 
-## Tableau de bord
+---
 
-L'onglet **"Tableau de bord"** affiche :
+## 4. Tableau de bord
 
-### Statistiques globales
-- **Nombre d'élèves** : total des élèves enregistrés
-- **Total encaissé** : somme de tous les paiements reçus
-- **Total restant dû** : somme des soldes restants
-- **Élèves non soldés** : nombre d'élèves qui n'ont pas payé en totalité
+- **Cartes** : élèves inscrits, total encaissé, total restant dû, élèves non soldés.
+- **Répartition** : pourcentages Soldés / Partiels / Non payés.
+- **Liste des élèves** : triable et **filtrable par statut** ; **double-clic** = ouvrir la fiche.
 
-### Liste des élèves
-- Tableau complet avec statut de paiement
-- Filtre par statut : Tous, Soldés, Partiellement payés, Non payés
-- Codes couleur :
-  - 🟢 Vert : Soldé
-  - 🟡 Orange : Partiellement payé
-  - 🔴 Rouge : Non payé
+---
 
-## Statuts de paiement
+## 5. Questions fréquentes
 
-- **Soldé** : l'élève a payé la totalité des frais de scolarité
-- **Partiellement payé** : l'élève a effectué des paiements mais il reste un solde
-- **Non payé** : aucun paiement n'a été enregistré
+**Où sont stockées mes données ?**
+Dans votre dossier utilisateur : `%APPDATA%/EduPaie/edupaie.db` (Windows) ou `~/.config/EduPaie/` (Linux/macOS). Pensez à le sauvegarder.
 
-## Conseils
+**Puis-je saisir un paiement supérieur au solde ?**
+Non, par conception. Le formulaire vous avertit dès la saisie et l'enregistrement est bloqué.
 
-- Utilisez la recherche pour trouver rapidement un élève
-- Vérifiez régulièrement le tableau de bord pour suivre les encaissements
-- Imprimez systématiquement un reçu après chaque paiement
-- Conservez une copie des reçus PDF en cas de litige
+**Un paiement a été saisi en double, que faire ?**
+Fiche élève → sélectionnez le paiement → **Annuler ce paiement…** avec un motif. L'historique conserve la trace ; le solde est restauré.
 
-## Support
+**Le reçu d'un paiement annulé est-il conservé ?**
+Oui. Il apparaît « Annulé » dans l'historique et reste consultable/téléchargeable.
 
-En cas de problème ou de question, contactez l'administrateur système.
+**Comment changer les tarifs d'une classe ?**
+Les montants sont dans la table `fee_plan` de la base (un outil de gestion des plans de frais peut être ajouté ultérieurement).

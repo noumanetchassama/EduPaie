@@ -1,129 +1,87 @@
-# EduPaie - Gestion des paiements scolaires
+# EduPaie — Gestion des paiements scolaires
 
-Application desktop pour la gestion des paiements des élèves, développée en Python avec PySide6 et SQLite.
+Application desktop de gestion des paiements de scolarité, développée en **Python / PySide6** avec **SQLite** et génération de **reçus PDF** (reportlab).
+
+![Statuts](https://img.shields.io/badge/statuts-Sold%C3%A9%20%2F%20Partiel%20%2F%20Non%20pay%C3%A9-2c5282)
 
 ## Fonctionnalités
 
-- **Gestion des élèves** : ajouter, modifier, supprimer des élèves avec recherche et filtrage par classe
-- **Enregistrement des paiements** : enregistrement de paiements avec validation du solde (ne peut pas être négatif)
-- **Calcul automatique du solde** : calcul en temps réel du solde restant pour chaque élève
-- **Statuts de paiement** : affichage automatique du statut (Soldé / Partiellement payé / Non payé)
-- **Historique des paiements** : vue chronologique de tous les paiements par élève
-- **Génération de reçus** : reçus numérotés uniques exportables en PDF
-- **Tableau de bord** : statistiques globales (nombre d'élèves, total encaissé, total restant dû)
+- **Gestion des élèves** : ajout, modification, suppression (avec garde-fou : impossible s'il existe des paiements) ; matricule généré automatiquement ; liste **recherchable** (nom, prénom, matricule) et **filtrable** par classe **et** par statut.
+- **Enregistrement des paiements** : montant, date, mode (espèces / chèque / virement / mobile money), référence optionnelle ; **le solde ne peut jamais devenir négatif** — un avertissement temps réel signale tout montant supérieur au solde restant.
+- **Calcul automatique du solde** : solde = total dû (plans de frais par classe) − somme des paiements valides ; **statut dérivé** (Soldé / Partiellement payé / Non payé) affiché dans la liste et la fiche élève.
+- **Historique des paiements** : liste chronologique par élève avec **solde après chaque paiement**, paiements annulés visibles et distingués.
+- **Reçus** : numéro unique `REC-AAAA-NNNNNN` généré **atomiquement**, snapshot figé en base → **téléchargement PDF** et **réimpression strictement identique**, aperçu avant impression, impression directe via la visionneuse système.
+- **Annulation de paiement** (motif obligatoire) : historique conservé, soldes recalculés.
+- **Tableau de bord** : nombre d'élèves, total encaissé, total restant dû, élèves non soldés, répartition par statut et liste filtrable.
+- **Robustesse** : argent stocké en **entiers (centimes)** — pas d'erreurs d'arrondi ; transactions SQLite explicites ; schéma auto-migré au démarrage.
 
-## Installation
+## Démarrage rapide
 
-### Prérequis
-
-- Python 3.10 ou supérieur
-- pip (gestionnaire de paquets Python)
-
-### Étapes
-
-1. Cloner le dépôt ou télécharger les fichiers
-2. Installer les dépendances :
 ```bash
 pip install -r requirements.txt
+python main.py                 # lance l'application
+python generate_test_data.py   # (optionnel) 15 élèves de démonstration
+python data/seed.py            # (optionnel) régénère la DB embarquée
 ```
 
-3. Générer les données de test (optionnel) :
-```bash
-python generate_test_data.py
+Au premier lancement, la base est créée dans `%APPDATA%/EduPaie` (Windows) ou `~/.config/EduPaie` (Linux/macOS), avec classes et plans de frais par défaut. Les reçus PDF sont enregistrés dans `~/Documents/EduPaie/Recus`.
+
+> Astuce : la variable d'environnement `EDUPAIE_DB` permet de pointer vers une autre base (utilisé par les tests).
+
+## Architecture (3 couches)
+
+```
+app/
+├── config.py               # Chemins (APPDATA/_MEIPASS), monnaie, école
+├── models/                 # Student, Payment, ClassModel, SchoolYear
+├── data/
+│   ├── db.py               # Singleton SQLite : FK, WAL, transactions, migrations
+│   ├── schema.sql          # Schéma idempotent + données de base
+│   └── repositories/       # Accès données (SQL uniquement)
+├── services/               # Logique métier et validations
+│   ├── student_service.py  # CRUD élèves, matricules, année courante
+│   ├── payment_service.py  # Paiements atomiques, snapshots, statistiques
+│   ├── balance_service.py  # Soldes et statuts
+│   └── receipt_service.py  # Reçus PDF depuis le snapshot figé
+└── ui/                     # PySide6 : navigation latérale, pages, thème
+main.py                     # Point d'entrée (logging, DB, thème, excepthook)
+tests/test_services.py      # Tests pytest (base isolée)
+build.py                    # Packaging PyInstaller
 ```
 
-4. Lancer l'application :
-```bash
-python main.py
-```
-
-## Architecture
-
-Le projet suit une architecture en 3 couches :
-
-- **`models/`** : Classes de données (Élève, Paiement)
-- **`repository/`** : Couche d'accès aux données (DAO) avec SQL
-- **`services/`** : Logique métier (calculs, validations, règles)
-- **`ui/`** : Interface utilisateur PySide6
-
-### Schéma de la base de données
-
-```sql
--- Table élèves
-CREATE TABLE eleves (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nom TEXT NOT NULL,
-    prenom TEXT NOT NULL,
-    classe TEXT NOT NULL,
-    annee_scolaire TEXT NOT NULL,
-    montant_du REAL NOT NULL,
-    date_creation DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-
--- Table paiements
-CREATE TABLE paiements (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    eleve_id INTEGER NOT NULL,
-    montant REAL NOT NULL,
-    date_paiement DATETIME NOT NULL,
-    mode_paiement TEXT NOT NULL,
-    numero_recu TEXT NOT NULL UNIQUE,
-    FOREIGN KEY (eleve_id) REFERENCES eleves(id)
-);
-```
+Règles clés :
+- **Atomicité** : compteur de reçus + paiement + snapshot écrits dans **une seule transaction** (pas de doublon de numéro possible).
+- **Snapshot figé** : le PDF est régénéré depuis les données enregistrées à l'émission — les modifications ultérieures de l'élève ne dénaturent jamais un reçu.
+- **Suppression protégée** : un élève avec paiements ne peut pas être supprimé (préservation des reçus émis).
 
 ## Utilisation
 
-### Enregistrer un élève
-
-1. Aller dans l'onglet "Élèves"
-2. Cliquer sur "Ajouter un élève"
-3. Remplir le formulaire (nom, prénom, classe, année scolaire, montant dû)
-4. Cliquer sur "Enregistrer"
-
 ### Enregistrer un paiement
+1. Onglet **Élèves** → sélectionner un élève → **Enregistrer un paiement**
+2. Saisir le montant (un aperçu affiche le solde après paiement ; tout dépassement est refusé), la date, le mode
+3. Le reçu est généré automatiquement avec son numéro unique — disponible immédiatement dans la **fiche élève**
 
-1. Sélectionner un élève dans la liste
-2. Cliquer sur "Enregistrer un paiement"
-3. Saisir le montant, la date et le mode de paiement
-4. Le système vérifie que le solde ne devient pas négatif
-5. Un numéro de reçu unique est généré automatiquement
-
-### Consulter l'historique et imprimer un reçu
-
-1. Sélectionner un élève
-2. Cliquer sur "Voir détails"
-3. Dans l'historique, sélectionner un paiement
-4. Cliquer sur "Voir le reçu" pour les détails ou "Imprimer le reçu (PDF)" pour générer le PDF
+### Consulter / télécharger / imprimer un reçu
+1. **Élèves** → double-clic (ou **Voir la fiche**)
+2. Sélectionner un paiement dans l'historique → **Voir le reçu**, **Télécharger le reçu (PDF)** ou **Imprimer le reçu**
 
 ### Tableau de bord
+L'onglet **Tableau de bord** affiche les cartes (élèves, encaissé, restant dû, non soldés), la répartition Soldés / Partiels / Non payés et la liste filtrable par statut (double-clic = ouvrir la fiche).
 
-L'onglet "Tableau de bord" affiche :
-- Le nombre total d'élèves
-- Le montant total encaissé
-- Le montant total restant dû
-- Le nombre d'élèves non soldés
-- La liste des élèves filtrable par statut de paiement
+## Tests
 
-## Branches de développement
+```bash
+python -m pytest tests/ -v
+```
 
-- `feature/gestion-eleves` : CRUD élèves
-- `feature/enregistrement-paiements` : Enregistrement paiements
-- `feature/calcul-solde` : Calcul solde et statuts
-- `feature/historique-paiements` : Historique et reçus
-- `feature/generation-recus` : Génération PDF reçus
-- `feature/tableau-bord` : Tableau de bord
-- `feature/jeu-donnees-test` : Données de test
-- `documentation` : Documentation
-- `packaging` : Packaging PyInstaller
+16 tests couvrent : CRUD élèves, matricules dupliqués, validations (nom, montants, dates, modes), statuts (non payé → partiel → soldé), dépassement de solde refusé, annulation avec restauration du solde, séquence de numéros de reçus, immutabilité des snapshots, génération PDF.
 
-## Technologies utilisées
+## Packaging (Windows)
 
-- **Python 3.10+** : Langage principal
-- **PySide6** : Interface graphique
-- **SQLite** : Base de données
-- **reportlab** : Génération de PDF
+```bash
+python build.py    # produit dist/EduPaie.exe (DB seed et schéma embarqués)
+```
 
 ## Auteur
 
-Développé dans le cadre du projet EduPaie - Gestion des paiements scolaires.
+Projet pédagogique EduPaie — gestion des paiements scolaires.
