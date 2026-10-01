@@ -1,163 +1,125 @@
 """
-EduPaie - Application de gestion des paiements scolaires
+EduPaie — Application de gestion des paiements scolaires
 Point d'entrée principal
 
-Fonctionnalités :
-- Excepthook global pour capturer toutes les exceptions
-- Logging dans fichier (APPDATA/EduPaie/edupaie.log)
-- Copie de la DB seed au premier lancement
-- Initialisation du schéma de base de données
+Séquencement :
+1. Logging (APPDATA/EduPaie/edupaie.log)
+2. Base de données : schéma initialisé/migré à chaque lancement,
+   DB seed copiée au premier lancement si disponible
+3. Thème professionnel éducatif (palette + stylesheet)
+4. Fenêtre principale (navigation latérale)
 """
 
-import sys
 import logging
 import shutil
+import sys
 from pathlib import Path
+
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtCore import Qt
 
-# Configuration de l'application
-try:
-    from app.config import DB_PATH, SEED_DB_PATH, LOG_FILE
-    from app.data.db import Database
-except ImportError:
-    # Fallback pour compatibilité avec l'ancien code
-    DB_PATH = Path("database/edupaie.db")
-    SEED_DB_PATH = Path("database/edupaie.db")
-    LOG_FILE = Path("edupaie.log")
-
-from ui.main_window import MainWindow
+# Configuration (chemins, monnaie, école)
+from app.config import DB_PATH, LOG_FILE, SEED_DB_PATH
 
 
 def setup_logging():
-    """
-    Configure le logging de l'application.
-
-    Les logs sont écrits dans APPDATA/EduPaie/edupaie.log
-    """
-    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(LOG_FILE, encoding='utf-8'),
-            logging.StreamHandler(sys.stdout)
-        ]
-    )
-
+    """Configure le logging fichier + console."""
+    try:
+        LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[
+                logging.FileHandler(LOG_FILE, encoding="utf-8"),
+                logging.StreamHandler(sys.stdout),
+            ],
+        )
+    except Exception:
+        # Jamais bloquant : on garde au moins la console
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
     logging.info("EduPaie démarré")
 
 
 def handle_exception(exc_type, exc_value, exc_traceback):
-    """
-    Gestionnaire global d'exceptions.
-
-    Capture toutes les exceptions non gérées, les log et affiche
-    un message à l'utilisateur.
-    """
+    """Gestionnaire global d'exceptions : log + message utilisateur."""
     if issubclass(exc_type, KeyboardInterrupt):
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
 
     logging.error("Exception non gérée", exc_info=(exc_type, exc_value, exc_traceback))
 
-    # Afficher un message à l'utilisateur (si QApplication existe)
     if QApplication.instance():
-        error_msg = f"Une erreur inattendue s'est produite :\n\n{str(exc_value)}\n\n"
-        error_msg += f"Les détails ont été enregistrés dans :\n{LOG_FILE}"
-
         QMessageBox.critical(
             None,
             "Erreur",
-            error_msg
+            f"Une erreur inattendue s'est produite :\n\n{exc_value}\n\n"
+            f"Les détails ont été enregistrés dans :\n{LOG_FILE}",
         )
 
 
-def copy_seed_db_if_needed():
+def prepare_database():
     """
-    Copie la DB seed vers l'emplacement de travail si elle n'existe pas.
+    Prépare la base de données de travail.
 
-    La DB seed est embarquée avec l'exécutable (sys._MEIPASS)
-    et copiée dans APPDATA/EduPaie au premier lancement.
+    - Initialise/migre systématiquement le schéma (idempotent)
+    - Au premier lancement, si la DB de travail est vide et qu'une DB seed
+      embarquée existe, les données de démonstration sont copiées d'abord.
     """
-    if DB_PATH.exists():
-        logging.info(f"DB de travail existante : {DB_PATH}")
-        return
+    from app.data.db import Database
 
-    logging.info("Premier lancement : copie de la DB seed...")
-
-    try:
-        # Copier la DB seed vers l'emplacement de travail
+    first_run = not DB_PATH.exists() or DB_PATH.stat().st_size == 0
+    if first_run and Path(SEED_DB_PATH).exists():
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(SEED_DB_PATH, DB_PATH)
-        logging.info(f"DB seed copiée vers {DB_PATH}")
-    except Exception as e:
-        logging.error(f"Erreur lors de la copie de la DB seed : {e}")
-        # Si la copie échoue, créer une DB vide
-        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-        DB_PATH.touch()
-        logging.warning("DB vide créée suite à l'erreur de copie")
+        try:
+            shutil.copy2(SEED_DB_PATH, DB_PATH)
+            logging.info(f"DB seed copiée vers {DB_PATH}")
+        except Exception as e:
+            logging.warning(f"Copie de la DB seed impossible ({e}) : "
+                            "création d'une base vierge")
 
-
-def initialize_database():
-    """
-    Initialise la base de données avec le schéma.
-
-    Crée les tables si elles n'existent pas.
-    """
-    try:
-        db = Database()
-        db.initialize_schema()
-        logging.info("Base de données initialisée")
-    except Exception as e:
-        logging.error(f"Erreur lors de l'initialisation de la DB : {e}")
-        raise
+    db = Database()
+    db.initialize_schema()
+    logging.info(f"Base de données prête : {DB_PATH}")
 
 
 def main():
-    # Configuration de l'excepthook global
     sys.excepthook = handle_exception
-
-    # Configuration du logging
     setup_logging()
 
-    # Copie de la DB seed si nécessaire
-    copy_seed_db_if_needed()
-
-    # Initialisation de la base de données
-    initialize_database()
-
-    # Création de l'application Qt
-    app = QApplication(sys.argv)
-    app.setStyle('Fusion')
-
-    # Appliquer le thème professionnel éducatif
     try:
-        from app.ui.theme import get_professional_theme, get_professional_stylesheet
-        app.setPalette(get_professional_theme())
-        app.setStyleSheet(get_professional_stylesheet())
-        logging.info("Thème professionnel éducatif appliqué")
-    except ImportError:
-        logging.warning("Thème professionnel non disponible, utilisation du thème par défaut")
+        prepare_database()
+    except Exception as e:
+        logging.error(f"Échec de l'initialisation de la base : {e}")
+        QMessageBox.critical(
+            None, "Erreur de base de données",
+            f"Impossible d'initialiser la base de données :\n\n{e}")
+        sys.exit(1)
 
-    # Création et affichage de la fenêtre principale
+    app = QApplication(sys.argv)
+    app.setApplicationName("EduPaie")
+    app.setOrganizationName("EduPaie")
+    app.setStyle("Fusion")
+
+    from app.ui.theme import get_professional_palette, get_professional_stylesheet
+    app.setPalette(get_professional_palette())
+    app.setStyleSheet(get_professional_stylesheet())
+
+    from app.ui.main_window import MainWindow
     try:
         window = MainWindow()
-        window.show()
-        logging.info("Fenêtre principale affichée")
     except Exception as e:
         logging.error(f"Erreur lors de la création de la fenêtre : {e}")
         QMessageBox.critical(
-            None,
-            "Erreur de démarrage",
-            f"Impossible de démarrer l'application :\n\n{str(e)}"
-        )
+            None, "Erreur de démarrage",
+            f"Impossible de démarrer l'application :\n\n{e}")
         sys.exit(1)
 
-    # Boucle d'événements
+    window.show()
+    logging.info("Fenêtre principale affichée")
     sys.exit(app.exec())
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
