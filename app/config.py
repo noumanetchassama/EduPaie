@@ -2,8 +2,8 @@
 Configuration de l'application EduPaie
 
 Contient :
-- resource_path() : pour accéder aux ressources embarquées par PyInstaller
-- Chemins utilisateur : pour DB de travail, logs et PDFs
+- resource_path() : accès aux ressources embarquées par PyInstaller (base = racine projet en dev)
+- Chemins utilisateur : DB de travail, logs et reçus PDF
 - Configuration monnaie et école
 """
 
@@ -16,27 +16,32 @@ from pathlib import Path
 # GESTION DES RESSOURCES EMBARQUÉES (PyInstaller)
 # ============================================================
 
+def _base_path() -> Path:
+    """
+    Retourne le répertoire de base des ressources.
+
+    - Avec PyInstaller (--onefile / --onedir) : sys._MEIPASS
+    - En développement : la RACINE du projet (parent du package `app`)
+    """
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass)
+    # app/config.py -> racine du projet = parent du dossier `app`
+    return Path(__file__).resolve().parent.parent
+
+
 def resource_path(relative_path: str) -> str:
     """
     Retourne le chemin absolu vers une ressource.
 
-    En développement : chemin relatif au dossier du script
-    Avec PyInstaller --onefile : chemin dans sys._MEIPASS (dossier temporaire)
-
     Args:
         relative_path: Chemin relatif depuis la racine du projet
+                       (ex: 'app/data/schema.sql', 'data/edupaie_seed.db')
 
     Returns:
         Chemin absolu vers la ressource
     """
-    try:
-        # PyInstaller crée un dossier temporaire sys._MEIPASS
-        base_path = sys._MEIPASS
-    except AttributeError:
-        # En développement, base_path est le dossier du script
-        base_path = os.path.dirname(os.path.abspath(__file__))
-
-    return os.path.join(base_path, relative_path)
+    return str(_base_path() / relative_path)
 
 
 # ============================================================
@@ -45,68 +50,64 @@ def resource_path(relative_path: str) -> str:
 
 def get_appdata_path() -> Path:
     """
-    Retourne le chemin du dossier Application Data de l'utilisateur.
+    Retourne le dossier de données de l'utilisateur.
 
     Windows : %APPDATA%/EduPaie
     Linux/macOS : ~/.config/EduPaie
-
-    Returns:
-        Path: Chemin du dossier de données utilisateur
     """
-    if sys.platform == 'win32':
-        base = Path(os.environ.get('APPDATA', os.path.expanduser('~')))
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA", os.path.expanduser("~")))
     else:
-        base = Path(os.path.expanduser('~/.config'))
+        base = Path(os.path.expanduser("~/.config"))
 
-    app_path = base / 'EduPaie'
+    app_path = base / "EduPaie"
     app_path.mkdir(parents=True, exist_ok=True)
     return app_path
 
 
 def get_documents_path() -> Path:
     """
-    Retourne le chemin du dossier Documents de l'utilisateur.
-
-    Windows : %USERPROFILE%/Documents/EduPaie
-    Linux/macOS : ~/Documents/EduPaie
-
-    Returns:
-        Path: Chemin du dossier Documents/EduPaie
+    Retourne le dossier Documents de l'utilisateur (sous-dossier EduPaie créé).
     """
-    if sys.platform == 'win32':
-        base = Path(os.path.expanduser('~/Documents'))
-    else:
-        base = Path(os.path.expanduser('~/Documents'))
-
-    docs_path = base / 'EduPaie'
+    docs_path = Path(os.path.expanduser("~/Documents")) / "EduPaie"
     docs_path.mkdir(parents=True, exist_ok=True)
     return docs_path
 
 
 # Chemin de la base de données de travail (dans APPDATA)
-DB_PATH = get_appdata_path() / 'edupaie.db'
+# Surcharge possible pour les tests : variable d'environnement EDUPAIE_DB
+def _resolve_db_path() -> Path:
+    env_db = os.environ.get("EDUPAIE_DB")
+    if env_db:
+        return Path(env_db)
+    return get_appdata_path() / "edupaie.db"
+
+
+DB_PATH = _resolve_db_path()
 
 # Chemin de la base de données modèle (embarquée)
-SEED_DB_PATH = resource_path('data/edupaie_seed.db')
+SEED_DB_PATH = resource_path(os.path.join("data", "edupaie_seed.db"))
+
+# Chemin du fichier de schéma SQL (embarqué)
+SCHEMA_PATH = resource_path(os.path.join("app", "data", "schema.sql"))
 
 # Chemin du dossier des reçus PDF (dans Documents)
-RECEIPTS_FOLDER = get_documents_path() / 'Recus'
+RECEIPTS_FOLDER = get_documents_path() / "Recus"
 RECEIPTS_FOLDER.mkdir(parents=True, exist_ok=True)
 
 # Chemin du fichier de logs (dans APPDATA)
-LOG_FILE = get_appdata_path() / 'edupaie.log'
+LOG_FILE = get_appdata_path() / "edupaie.log"
 
 
 # ============================================================
 # CONFIGURATION MONNAIE
 # ============================================================
 
-CURRENCY_CODE = 'EUR'  # Code ISO de la monnaie
-CURRENCY_SYMBOL = '€'   # Symbole affiché
-CURRENCY_SUBUNIT = 100  # Nombre de sous-unités par unité (100 cents = 1 euro)
+CURRENCY_SYMBOL = "€"
+CURRENCY_SUBUNIT = 100  # 100 cents = 1 euro
 
 # Nom de l'école (personnalisable)
-SCHOOL_NAME = "École Exemple"
+SCHOOL_NAME = "Groupe Scolaire Exemple"
 SCHOOL_ADDRESS = "123 Rue de l'École"
 SCHOOL_PHONE = "01 23 45 67 89"
 SCHOOL_EMAIL = "contact@ecole-exemple.fr"
@@ -117,43 +118,16 @@ SCHOOL_EMAIL = "contact@ecole-exemple.fr"
 # ============================================================
 
 def euros_to_cents(euros: float) -> int:
-    """
-    Convertit un montant en euros en cents (entier).
-
-    Attention : évite les erreurs d'arrondi float en multipliant par 100
-    et en arrondissant à l'entier le plus proche.
-
-    Args:
-        euros: Montant en euros (ex: 12.50)
-
-    Returns:
-        int: Montant en cents (ex: 1250)
-    """
-    return int(round(euros * CURRENCY_SUBUNIT))
+    """Convertit un montant en euros vers des centimes (entier, sans erreur d'arrondi)."""
+    return int(round(float(euros) * CURRENCY_SUBUNIT))
 
 
 def cents_to_euros(cents: int) -> float:
-    """
-    Convertit un montant en cents en euros.
-
-    Args:
-        cents: Montant en cents (ex: 1250)
-
-    Returns:
-        float: Montant en euros (ex: 12.50)
-    """
+    """Convertit un montant en centimes vers des euros (float)."""
     return cents / CURRENCY_SUBUNIT
 
 
 def format_euros(cents: int) -> str:
-    """
-    Formate un montant en cents pour l'affichage.
-
-    Args:
-        cents: Montant en cents (ex: 1250)
-
-    Returns:
-        str: Montant formaté (ex: "12,50 €")
-    """
+    """Formate un montant en centimes pour l'affichage (ex: 1250 -> '12,50 €')."""
     euros = cents / CURRENCY_SUBUNIT
-    return f"{euros:.2f} {CURRENCY_SYMBOL}"
+    return f"{euros:,.2f}".replace(",", " ").replace(".", ",") + f" {CURRENCY_SYMBOL}"

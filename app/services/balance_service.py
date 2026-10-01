@@ -118,11 +118,12 @@ class BalanceService:
         total_due = self.get_total_due(student_id, school_year_id)
         total_paid = self.get_total_paid(student_id, school_year_id)
 
-        # Vérifier si en retard (échéance dépassée)
-        if balance > 0 and self._is_overdue(student_id, school_year_id):
-            return self.STATUS_LATE
-
-        # Déterminer le statut
+        # Déterminer le statut (3 statuts exigés : Soldé / Partiel / Non payé).
+        # Le retard sur échéance reste disponible via is_overdue().
+        if total_due == 0:
+            # Aucun plan de frais : soldé seulement si des paiements existent,
+            # sinon l'élève est considéré non payé
+            return self.STATUS_SOLD if total_paid > 0 else self.STATUS_UNPAID
         if balance == 0:
             return self.STATUS_SOLD
         elif total_paid > 0:
@@ -130,7 +131,7 @@ class BalanceService:
         else:
             return self.STATUS_UNPAID
 
-    def _is_overdue(self, student_id: int, school_year_id: int) -> bool:
+    def is_overdue(self, student_id: int, school_year_id: int) -> bool:
         """
         Vérifie si l'élève est en retard (échéance dépassée).
 

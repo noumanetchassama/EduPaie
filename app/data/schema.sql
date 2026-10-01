@@ -8,6 +8,7 @@
 -- - Numérotation atomique des reçus
 -- - Snapshot pour ré-impression identique
 -- - Annulation au lieu de suppression
+-- Toutes les instructions sont idempotentes (IF NOT EXISTS / OR IGNORE)
 -- ============================================================
 
 -- ============================================================
@@ -21,9 +22,11 @@ CREATE TABLE IF NOT EXISTS school_year (
     is_current BOOLEAN DEFAULT 0 CHECK(is_current IN (0, 1))
 );
 
--- Index pour recherche rapide de l'année courante
 CREATE INDEX IF NOT EXISTS idx_school_year_current ON school_year(is_current) WHERE is_current = 1;
 
+-- Année scolaire courante par défaut
+INSERT OR IGNORE INTO school_year (label, start_date, end_date, is_current)
+VALUES ('2024-2025', '2024-09-01', '2025-07-31', 1);
 
 -- ============================================================
 -- TABLE DES CLASSES
@@ -38,20 +41,30 @@ CREATE TABLE IF NOT EXISTS class (
     UNIQUE(name, school_year_id)
 );
 
--- Index pour recherche par nom
 CREATE INDEX IF NOT EXISTS idx_class_name ON class(name COLLATE NOCASE);
 
+-- Classes par défaut (rattachées à l'année courante)
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '6ème A', '6ème', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '6ème B', '6ème', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '5ème A', '5ème', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '4ème A', '4ème', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '3ème A', '3ème', id FROM school_year WHERE is_current = 1;
 
 -- ============================================================
 -- TABLE DES ÉLÈVES
 -- ============================================================
 CREATE TABLE IF NOT EXISTS student (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    matricule TEXT UNIQUE NOT NULL,         -- Numéro unique d'élève
+    matricule TEXT UNIQUE NOT NULL,          -- Numéro unique d'élève
     last_name TEXT NOT NULL,                 -- Nom de famille
     first_name TEXT NOT NULL,                -- Prénom
     birth_date DATE,                         -- Date de naissance
-    class_id INTEGER NOT NULL,              -- FK vers class
+    class_id INTEGER NOT NULL,               -- FK vers class
     parent_name TEXT,                        -- Nom du parent/tuteur
     parent_phone TEXT,                       -- Téléphone du parent
     parent_email TEXT,                       -- Email du parent
@@ -60,13 +73,9 @@ CREATE TABLE IF NOT EXISTS student (
     FOREIGN KEY (class_id) REFERENCES class(id) ON DELETE RESTRICT
 );
 
--- Index pour recherche par nom (tri alphabétique)
 CREATE INDEX IF NOT EXISTS idx_student_last_name ON student(last_name COLLATE NOCASE, first_name COLLATE NOCASE);
--- Index pour recherche par classe
 CREATE INDEX IF NOT EXISTS idx_student_class ON student(class_id);
--- Index pour recherche par matricule
 CREATE INDEX IF NOT EXISTS idx_student_matricule ON student(matricule);
-
 
 -- ============================================================
 -- TABLE DES PLANS DE FRAIS (montants dus par classe/année)
@@ -84,9 +93,25 @@ CREATE TABLE IF NOT EXISTS fee_plan (
     UNIQUE(class_id, school_year_id, label)
 );
 
--- Index pour recherche des frais d'une classe
 CREATE INDEX IF NOT EXISTS idx_fee_plan_class ON fee_plan(class_id, school_year_id);
 
+-- Plans de frais par défaut : 6ème 500 €, 5ème 550 €, 4ème 600 €, 3ème 650 €
+INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
+SELECT c.id, c.school_year_id, 'Scolarité', 50000, '2025-06-30'
+FROM class c JOIN school_year sy ON sy.id = c.school_year_id
+WHERE c.level = '6ème';
+INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
+SELECT c.id, c.school_year_id, 'Scolarité', 55000, '2025-06-30'
+FROM class c JOIN school_year sy ON sy.id = c.school_year_id
+WHERE c.level = '5ème';
+INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
+SELECT c.id, c.school_year_id, 'Scolarité', 60000, '2025-06-30'
+FROM class c JOIN school_year sy ON sy.id = c.school_year_id
+WHERE c.level = '4ème';
+INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
+SELECT c.id, c.school_year_id, 'Scolarité', 65000, '2025-06-30'
+FROM class c JOIN school_year sy ON sy.id = c.school_year_id
+WHERE c.level = '3ème';
 
 -- ============================================================
 -- TABLE DES PAIEMENTS
@@ -101,20 +126,16 @@ CREATE TABLE IF NOT EXISTS payment (
     reference TEXT,                          -- Référence (n° chèque, etc.)
     receipt_no TEXT NOT NULL UNIQUE,         -- Numéro de reçu unique
     status TEXT DEFAULT 'valide' CHECK(status IN ('valide', 'annule')),
-    cancel_reason TEXT,                       -- Motif d'annulation
+    cancel_reason TEXT,                      -- Motif d'annulation
     cancel_date DATE,                        -- Date d'annulation
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES student(id) ON DELETE RESTRICT,
     FOREIGN KEY (school_year_id) REFERENCES school_year(id) ON DELETE RESTRICT
 );
 
--- Index pour recherche des paiements d'un élève
 CREATE INDEX IF NOT EXISTS idx_payment_student ON payment(student_id);
--- Index pour recherche par date
 CREATE INDEX IF NOT EXISTS idx_payment_date ON payment(paid_on DESC);
--- Index pour recherche par numéro de reçu
 CREATE INDEX IF NOT EXISTS idx_payment_receipt ON payment(receipt_no);
-
 
 -- ============================================================
 -- TABLE DES SNAPSHOTS DE REÇUS (pour ré-impression identique)
@@ -126,24 +147,14 @@ CREATE TABLE IF NOT EXISTS receipt_snapshot (
     FOREIGN KEY (payment_id) REFERENCES payment(id) ON DELETE CASCADE
 );
 
-
 -- ============================================================
 -- TABLE COMPTEUR DE REÇUS (numérotation atomique par année)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS receipt_counter (
-    year INTEGER PRIMARY KEY,                 -- Année (ex: 2024)
+    year INTEGER PRIMARY KEY,                -- Année (ex: 2024)
     last_number INTEGER NOT NULL DEFAULT 0   -- Dernier numéro utilisé
 );
 
-
--- ============================================================
--- DONNÉES INITIALES
--- ============================================================
-
--- Année scolaire courante (à adapter)
-INSERT OR IGNORE INTO school_year (label, start_date, end_date, is_current)
-VALUES ('2024-2025', '2024-09-01', '2025-07-31', 1);
-
--- Initialiser le compteur de reçus pour l'année courante
-INSERT OR IGNORE INTO receipt_counter (year, last_number)
-VALUES (2024, 0);
+-- Compteurs de reçus pré-initialisés (année scolaire en cours + suivante)
+INSERT OR IGNORE INTO receipt_counter (year, last_number) VALUES (2024, 0);
+INSERT OR IGNORE INTO receipt_counter (year, last_number) VALUES (2025, 0);
