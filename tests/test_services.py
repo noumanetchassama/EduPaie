@@ -5,9 +5,7 @@ Chaque test tourne sur une base SQLite temporaire isolée
 (variable d'environnement EDUPAIE_DB).
 """
 
-import os
 import sys
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -16,7 +14,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.data.db import Database  # noqa: E402
 from app.services.balance_service import BalanceService  # noqa: E402
-from app.services.exceptions import BusinessRuleError, ValidationError  # noqa: E402
+from app.services.class_service import ClassService  # noqa: E402
+from app.services.exceptions import BusinessRuleError, NotFoundError, ValidationError  # noqa: E402
 from app.services.payment_service import PaymentService  # noqa: E402
 from app.services.receipt_service import ReceiptService  # noqa: E402
 from app.services.student_service import StudentService  # noqa: E402
@@ -24,11 +23,15 @@ from app.services.student_service import StudentService  # noqa: E402
 
 @pytest.fixture(scope="module")
 def db(tmp_path_factory):
-    """Base de données isolée pour ce module de tests."""
+    """Base de données isolée pour ce module de tests.
+
+    Le chemin est passé EXPLICITEMENT au singleton : la variable
+    d'environnement EDUPAIE_DB est lue par app.config à l'import, donc
+    définie trop tard pour les tests.
+    """
     tmp = tmp_path_factory.mktemp("db")
-    os.environ["EDUPAIE_DB"] = str(tmp / "test.db")
     Database.reset_instance()
-    database = Database()
+    database = Database(str(tmp / "test.db"))
     database.initialize_schema()
     yield database
     Database.reset_instance()
@@ -211,7 +214,7 @@ class TestReceipts:
         student_service, payment_service, _ = services
         s = make_student(student_service, name="Martinez", first="Sarah")
         p = payment_service.create_payment(
-            student_id=s.id, amount_euros=75000,
+            student_id=s.id, amount_euros=20000,
             paid_on="2025-06-01", method="cheque")
 
         receipt_service = ReceiptService(payment_service=payment_service)
@@ -227,15 +230,110 @@ class TestReceipts:
         student_service, payment_service, _ = services
         s = make_student(student_service, name="Lopez", first="Enzo")
         p1 = payment_service.create_payment(
-            student_id=s.id, amount_euros=30000,
+            student_id=s.id, amount_euros=20000,
             paid_on="2025-06-01", method="especes")
         snap1 = payment_service.get_payment_snapshot(p1.id)
 
         payment_service.create_payment(
-            student_id=s.id, amount_euros=30000,
+            student_id=s.id, amount_euros=10000,
             paid_on="2025-06-02", method="especes")
 
         snap1_again = payment_service.get_payment_snapshot(p1.id)
         assert snap1 == snap1_again
         assert "FCFA" in snap1["balance"]["after_formatted"]
         assert snap1["balance"]["after_int"] >= 0
+
+    def test_update_payment_amount_and_balance(self, services):
+        """Modification d'un paiement : solde et snapshot recalculés."""
+        student_service, payment_service, balance_service = services
+        s = make_student(student_service, name="David", first="Camille")
+        year = student_service.get_current_school_year()
+        p = payment_service.create_payment(
+            student_id=s.id, amount_euros=10000,
+            paid_on="2025-06-01", method="especes")
+
+        payment_service.update_payment(
+            payment_id=p.id, amount_euros=20000,
+            paid_on="2025-06-05", method="cheque", reference="CHQ-77")
+
+        updated = payment_service.get_payment(p.id)
+        assert updated.amount_int == 20000
+        assert updated.method == "cheque"
+        assert updated.receipt_no == p.receipt_no  # numéro conservé
+        assert balance_service.get_total_paid(s.id, year.id) == 20000
+
+        snap = payment_service.get_payment_snapshot(p.id)
+        assert snap["payment"]["amount_int"] == 20000  # snapshot régénéré
+
+    def test_update_payment_exceeding_balance_refused(self, services):
+        """La modification ne doit pas rendre le solde négatif."""
+        student_service, payment_service, _ = services
+        s = make_student(student_service, name="Bertrand", first="Maxime")
+        p = payment_service.create_payment(
+            student_id=s.id, amount_euros=10000,
+            paid_on="2025-06-01", method="especes")
+        with pytest.raises(BusinessRuleError):
+            payment_service.update_payment(
+                payment_id=p.id, amount_euros=9999999,
+                paid_on="2025-06-02", method="especes")
+
+    def test_delete_payment_removes_it(self, services):
+        """Suppression définitive d'un paiement."""
+        student_service, payment_service, _ = services
+        s = make_student(student_service, name="Sanchez", first="Lina")
+        p = payment_service.create_payment(
+            student_id=s.id, amount_euros=10000,
+            paid_on="2025-06-01", method="especes")
+        assert payment_service.delete_payment(p.id) is True
+        assert payment_service.get_payment(p.id) is None
+        with pytest.raises(NotFoundError):
+            payment_service.delete_payment(p.id)
+
+
+# ======================================================================
+# Classes (CRUD + frais)
+# ======================================================================
+
+class TestClasses:
+    def test_create_class_with_fee(self, services):
+        student_service, _, _ = services
+        class_service = ClassService(student_service=student_service)
+        c = class_service.create_class("6ème C", "6ème", 52000)
+        info = class_service.get_class(c.id)
+        assert info["class"].name == "6ème C"
+        assert info["fee_int"] == 52000
+
+    def test_create_duplicate_class_refused(self, services):
+        student_service, _, _ = services
+        class_service = ClassService(student_service=student_service)
+        class_service.create_class("5ème Z", "5ème", 55000)
+        with pytest.raises(BusinessRuleError):
+            class_service.create_class("5ème Z", "5ème", 60000)
+
+    def test_update_class_fee_applies_to_students(self, services):
+        """Modifier les frais d'une classe recalcule les soldes des élèves."""
+        student_service, _, balance_service = services
+        class_service = ClassService(student_service=student_service)
+        c = class_service.create_class("4ème Z", "4ème", 60000)
+        s = student_service.create_student(
+            last_name="Test", first_name="Frais", class_id=c.id)
+        year = student_service.get_current_school_year()
+
+        class_service.update_class(c.id, "4ème Z bis", "4ème", 65000)
+        info = balance_service.get_balance_info(s.id, year.id)
+        assert info["total_due_int"] == 65000
+
+    def test_delete_class_with_students_refused(self, services):
+        student_service, _, _ = services
+        class_service = ClassService(student_service=student_service)
+        c = class_service.create_class("3ème Z", "3ème", 65000)
+        student_service.create_student(
+            last_name="Test", first_name="Classe", class_id=c.id)
+        with pytest.raises(BusinessRuleError):
+            class_service.delete_class(c.id)
+
+    def test_delete_empty_class(self, services):
+        student_service, _, _ = services
+        class_service = ClassService(student_service=student_service)
+        c = class_service.create_class("2nde Z", "2nde", 75000)
+        assert class_service.delete_class(c.id) is True

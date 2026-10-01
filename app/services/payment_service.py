@@ -258,6 +258,102 @@ class PaymentService:
     # Annulation / consultation
     # ------------------------------------------------------------------
 
+    def update_payment(
+        self,
+        payment_id: int,
+        amount_euros: float,
+        paid_on: str,
+        method: str,
+        reference: Optional[str] = None,
+    ) -> Payment:
+        """
+        Modifie un paiement existant avec validation du solde.
+
+        Le montant ne doit pas faire passer le solde de l'élève en négatif
+        (on exclut le paiement lui-même du calcul). Le snapshot du reçu est
+        régénéré pour refléter la correction, et le numéro de reçu est
+        conservé.
+
+        Raises:
+            ValidationError: Si les données sont invalides
+            BusinessRuleError: Si le solde deviendrait négatif
+            NotFoundError: Si le paiement n'existe pas
+        """
+        payment = self.payment_repo.get_by_id(payment_id)
+        if not payment:
+            raise NotFoundError(f"Paiement introuvable (ID: {payment_id})")
+        if payment.is_cancelled:
+            raise BusinessRuleError(
+                "Impossible de modifier un paiement annulé. Annulez-le ou "
+                "réenregistrez un nouveau paiement.")
+
+        student = self.student_repo.get_by_id(payment.student_id)
+        if not student:
+            raise NotFoundError(f"Élève introuvable (ID: {payment.student_id})")
+
+        school_year = self.student_service.get_current_school_year()
+
+        # Validations identiques à la création
+        try:
+            amount_euros = float(str(amount_euros).replace(",", "."))
+        except (TypeError, ValueError):
+            raise ValidationError("Montant invalide")
+        if amount_euros <= 0:
+            raise ValidationError("Le montant doit être strictement positif")
+        amount_int = int(round(amount_euros))
+
+        if method not in self.MODES_PAIEMENT:
+            raise ValidationError(f"Mode de paiement invalide : {method}")
+
+        try:
+            paid_date = datetime.strptime(paid_on, DATE_FORMAT).date()
+        except (TypeError, ValueError):
+            raise ValidationError(f"Format de date invalide (attendu : {DATE_FORMAT})")
+        if paid_date > date.today():
+            raise ValidationError("La date de paiement ne peut pas être dans le futur")
+
+        # Solde en excluant le paiement en cours de modification
+        year = self.school_year_repo.get_by_id(payment.school_year_id)
+        other_paid = self.payment_repo.get_total_by_student(
+            payment.student_id, payment.school_year_id)
+        balance_others = self.fee_plan_repo.get_total_by_class(
+            student.class_id, payment.school_year_id) - (other_paid - payment.amount_int)
+        if amount_int > balance_others:
+            raise BusinessRuleError(
+                f"Le montant ({format_euros(amount_int)}) dépasserait le solde "
+                f"restant ({format_euros(balance_others)}) après modification.")
+
+        # Mise à jour + snapshot régénéré (numéro de reçu inchangé)
+        payment.amount_int = amount_int
+        payment.paid_on = paid_on
+        payment.method = method
+        payment.reference = reference
+        updated = self.payment_repo.update(payment)
+        if not updated:
+            raise NotFoundError(f"Paiement introuvable (ID: {payment_id})")
+
+        snapshot = self._build_receipt_snapshot(
+            student, year, amount_int, paid_on, method, reference,
+            payment.receipt_no)
+        self.payment_repo.update(payment, snapshot=snapshot)
+        return payment
+
+    def delete_payment(self, payment_id: int) -> bool:
+        """
+        Supprime définitivement un paiement (réservé aux corrections).
+
+        L'annulation (cancel_payment) est à privilégier : elle conserve la
+        trace du reçu. La suppression est ici pour les saisies fantaisistes
+        ou les demandes de la direction.
+
+        Raises:
+            NotFoundError: Si le paiement n'existe pas
+        """
+        payment = self.payment_repo.get_by_id(payment_id)
+        if not payment:
+            raise NotFoundError(f"Paiement introuvable (ID: {payment_id})")
+        return self.payment_repo.delete(payment_id)
+
     def cancel_payment(self, payment_id: int, reason: str) -> bool:
         """
         Annule un paiement (soft delete).

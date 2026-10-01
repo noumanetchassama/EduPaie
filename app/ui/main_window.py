@@ -19,9 +19,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.services.balance_service import BalanceService
+from app.services.class_service import ClassService
 from app.services.payment_service import PaymentService
 from app.services.receipt_service import ReceiptService
 from app.services.student_service import StudentService
+from app.ui.classes_page import ClassesPage
 from app.ui.dashboard_page import DashboardPage
 from app.ui.students_page import StudentsPage
 from app.ui.widgets import COLOR_BG, COLOR_PRIMARY, COLOR_PRIMARY_DARK
@@ -29,6 +31,7 @@ from app.ui.widgets import COLOR_BG, COLOR_PRIMARY, COLOR_PRIMARY_DARK
 NAV_ITEMS = [
     ("dashboard", "Tableau de bord", "◧"),
     ("students", "Élèves", "☰"),
+    ("classes", "Classes", "▤"),
 ]
 
 
@@ -45,6 +48,8 @@ class MainWindow(QMainWindow):
         self.student_service = StudentService()
         self.payment_service = PaymentService()
         self.balance_service = BalanceService()
+        self.class_service = ClassService(
+            student_service=self.student_service)
         self.receipt_service = ReceiptService(payment_service=self.payment_service)
 
         self._sidebar_expanded = True
@@ -180,9 +185,14 @@ class MainWindow(QMainWindow):
             receipt_service=self.receipt_service,
             on_data_changed=self._refresh_all,
         )
+        self.classes_page = ClassesPage(
+            class_service=self.class_service,
+            on_data_changed=self._refresh_all,
+        )
 
         self.stack.addWidget(self.dashboard_page)
         self.stack.addWidget(self.students_page)
+        self.stack.addWidget(self.classes_page)
 
         root.addWidget(self.sidebar)
         root.addWidget(self.stack, 1)
@@ -229,6 +239,9 @@ class MainWindow(QMainWindow):
         elif key == "students":
             self.students_page.refresh()
             self.stack.setCurrentWidget(self.students_page)
+        elif key == "classes":
+            self.classes_page.refresh()
+            self.stack.setCurrentWidget(self.classes_page)
 
     def _open_student_from_dashboard(self, student_id: int):
         """Ouvre la fiche d'un élève depuis le tableau de bord."""
@@ -239,6 +252,7 @@ class MainWindow(QMainWindow):
         """Rafraîchit toutes les pages après une modification de données."""
         self.dashboard_page.refresh()
         self.students_page.refresh()
+        self.classes_page.refresh()
         self._refresh_school_year_label()
 
     def _refresh_school_year_label(self):

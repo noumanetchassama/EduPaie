@@ -129,6 +129,16 @@ class StudentDetailsDialog(QDialog):
         self.cancel_btn.setEnabled(False)
         actions.addWidget(self.cancel_btn)
 
+        self.edit_payment_btn = QPushButton("Modifier ce paiement…")
+        self.edit_payment_btn.clicked.connect(self.edit_payment)
+        self.edit_payment_btn.setEnabled(False)
+        actions.addWidget(self.edit_payment_btn)
+
+        self.delete_payment_btn = QPushButton("Supprimer ce paiement")
+        self.delete_payment_btn.clicked.connect(self.delete_payment)
+        self.delete_payment_btn.setEnabled(False)
+        actions.addWidget(self.delete_payment_btn)
+
         self.new_payment_btn = QPushButton("＋ Enregistrer un paiement")
         self.new_payment_btn.clicked.connect(self.add_payment)
         actions.addWidget(self.new_payment_btn)
@@ -245,7 +255,8 @@ class StudentDetailsDialog(QDialog):
     def _on_selection(self):
         has = self._selected_payment() is not None
         for btn in (self.receipt_btn, self.download_btn, self.print_btn,
-                    self.cancel_btn):
+                    self.cancel_btn, self.edit_payment_btn,
+                    self.delete_payment_btn):
             btn.setEnabled(has)
 
     # ------------------------------------------------------------------
@@ -323,6 +334,51 @@ class StudentDetailsDialog(QDialog):
             self.student_service, self.student, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted and self.on_changed:
             self.reload()
+            self.on_changed()
+
+    def edit_payment(self):
+        """Modifie le paiement sélectionné (montant, date, mode, référence)."""
+        payment = self._selected_payment()
+        if not payment:
+            return
+        from app.ui.payment_edit_dialog import PaymentEditDialog
+        dlg = PaymentEditDialog(
+            self.payment_service, self.student_service,
+            self.student, payment, parent=self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            QMessageBox.information(
+                self, "Paiement modifié",
+                "Le paiement a été mis à jour.\n"
+                "Le reçu conserve son numéro mais reflète la correction.")
+            self.reload()
+            if self.on_changed:
+                self.on_changed()
+
+    def delete_payment(self):
+        """Supprime définitivement le paiement sélectionné (double confirmation)."""
+        payment = self._selected_payment()
+        if not payment:
+            return
+        reply = QMessageBox.question(
+            self, "Confirmer la suppression",
+            f"Supprimer DÉFINITIVEMENT le paiement {payment.receipt_no} "
+            f"({self._fmt(payment.paid_on)}) ?\n\n"
+            "Le numéro de reçu ne sera pas réutilisé et le reçu ne sera "
+            "plus consultable. Pour garder une trace, préférez « Annuler "
+            "ce paiement… ».",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.payment_service.delete_payment(payment.id)
+        except EduPaieException as e:
+            QMessageBox.critical(self, "Suppression impossible", str(e))
+            return
+        QMessageBox.information(self, "Paiement supprimé",
+                                "Le paiement a été supprimé.")
+        self.reload()
+        if self.on_changed:
             self.on_changed()
 
     def cancel_payment(self):

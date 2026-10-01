@@ -265,6 +265,77 @@ class PaymentRepository:
         row = cursor.fetchone()
         return row['total'] if row else 0
 
+    def update(self, payment: Payment, snapshot: dict = None) -> bool:
+        """
+        Met à jour un paiement (montant, date, mode, référence).
+
+        Args:
+            payment: Objet Payment avec les nouvelles valeurs
+            snapshot: Nouveau snapshot du reçu (optionnel)
+
+        Returns:
+            bool: True si une ligne a été modifiée
+
+        Raises:
+            DatabaseError: En cas d'erreur de base de données
+        """
+        if payment.id is None:
+            raise ValueError("Impossible de modifier un paiement sans identifiant.")
+
+        with self.db.transaction() as cursor:
+            try:
+                cursor.execute(
+                    """
+                    UPDATE payment
+                    SET amount_int = ?, paid_on = ?, method = ?, reference = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        payment.amount_int,
+                        payment.paid_on,
+                        payment.method,
+                        payment.reference,
+                        payment.id,
+                    ),
+                )
+                updated = cursor.rowcount > 0
+
+                if updated and snapshot is not None:
+                    cursor.execute(
+                        """
+                        UPDATE receipt_snapshot
+                        SET snapshot_json = ?
+                        WHERE payment_id = ?
+                        """,
+                        (json.dumps(snapshot, ensure_ascii=False), payment.id),
+                    )
+                return updated
+            except sqlite3.IntegrityError as e:
+                raise DatabaseError(f"Erreur d'intégrité : {e}")
+
+    def delete(self, payment_id: int) -> bool:
+        """
+        Supprime physiquement un paiement (et son snapshot via CASCADE).
+
+        À n'utiliser que pour corriger une saisie erronée : préférer
+        l'annulation (soft delete) pour conserver la traçabilité.
+
+        Args:
+            payment_id: Identifiant du paiement
+
+        Returns:
+            bool: True si le paiement a été supprimé
+
+        Raises:
+            DatabaseError: En cas d'erreur de base de données
+        """
+        with self.db.transaction() as cursor:
+            try:
+                cursor.execute("DELETE FROM payment WHERE id = ?", (payment_id,))
+                return cursor.rowcount > 0
+            except sqlite3.Error as e:
+                raise DatabaseError(f"Erreur lors de la suppression : {e}")
+
     def cancel(self, payment_id: int, reason: str) -> bool:
         """
         Annule un paiement (soft delete).

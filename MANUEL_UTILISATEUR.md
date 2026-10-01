@@ -8,6 +8,7 @@ Lancez `python main.py` (ou `EduPaie.exe`). L'application s'ouvre sur le **Table
 
 - **Tableau de bord** — vue d'ensemble
 - **Élèves** — gestion des inscriptions et des paiements
+- **Classes** — niveaux, séries et frais de scolarité
 
 L'année scolaire en cours est affichée en bas de la barre latérale.
 
@@ -67,9 +68,31 @@ Pour chaque paiement sélectionné :
 
 Par défaut, les reçus sont aussi enregistrés dans `~/Documents/EduPaie/Recus/`.
 
+### Corriger ou supprimer un paiement
+
+Dans la fiche élève, sélectionnez un paiement dans l'historique :
+
+| Action | Effet |
+|---|---|
+| **Modifier ce paiement…** | Corrige le montant, la date, le mode ou la référence. Le **numéro de reçu est conservé** ; le solde ne peut pas devenir négatif. |
+| **Annuler ce paiement…** | Motif obligatoire ; le paiement reste visible « Annulé » dans l'historique. À privilégier pour garder une trace. |
+| **Supprimer ce paiement** | Suppression définitive (double confirmation) : le reçu n'est plus consultable. Réservé aux saisies erronées. |
+
 ---
 
-## 4. Tableau de bord
+## 4. Gérer les classes (onglet Classes)
+
+La page **Classes** liste toutes les classes avec leur niveau, leurs **frais annuels en FCFA**, l'échéance et le nombre d'élèves inscrits.
+
+- **＋ Nouvelle classe** : nom (ex. « 6ème C »), niveau, montant des frais.
+- **Modifier** : renommer la classe ou **changer les frais** — les soldes de tous les élèves de la classe sont recalculés automatiquement.
+- **Supprimer** : refusé si des élèves sont encore inscrits (déplacez-les d'abord).
+
+> Le total dû d'un élève = frais de scolarité de sa classe. Modifier les frais d'une classe met donc à jour le « Total dû » de chaque élève concerné.
+
+---
+
+## 5. Tableau de bord
 
 - **Cartes** : élèves inscrits, total encaissé, total restant dû, élèves non soldés.
 - **Répartition** : pourcentages Soldés / Partiels / Non payés.
@@ -77,7 +100,7 @@ Par défaut, les reçus sont aussi enregistrés dans `~/Documents/EduPaie/Recus/
 
 ---
 
-## 5. Questions fréquentes
+## 6. Questions fréquentes
 
 **Où sont stockées mes données ?**
 Dans votre dossier utilisateur : `%APPDATA%/EduPaie/edupaie.db` (Windows) ou `~/.config/EduPaie/` (Linux/macOS). Pensez à le sauvegarder.

@@ -7,11 +7,13 @@ Application desktop de gestion des paiements de scolarité (monnaie : **FCFA**),
 ## Fonctionnalités
 
 - **Gestion des élèves** : ajout, modification, suppression (avec garde-fou : impossible s'il existe des paiements) ; matricule généré automatiquement ; liste **recherchable** (nom, prénom, matricule) et **filtrable** par classe **et** par statut.
+- **Gestion des classes** : page dédiée pour créer, modifier et supprimer les classes et leurs **frais de scolarité FCFA** (suppression refusée si des élèves y sont inscrits) ; modifier les frais recalcule automatiquement les soldes de tous les élèves de la classe.
 - **Enregistrement des paiements** : montant, date, mode (espèces / chèque / virement / mobile money), référence optionnelle ; **le solde ne peut jamais devenir négatif** — un avertissement temps réel signale tout montant supérieur au solde restant.
 - **Calcul automatique du solde** : solde = total dû (plans de frais par classe) − somme des paiements valides ; **statut dérivé** (Soldé / Partiellement payé / Non payé) affiché dans la liste et la fiche élève.
 - **Historique des paiements** : liste chronologique par élève avec **solde après chaque paiement**, paiements annulés visibles et distingués.
 - **Reçus** : numéro unique `REC-AAAA-NNNNNN` généré **atomiquement**, snapshot figé en base → **téléchargement PDF** et **réimpression strictement identique**, aperçu avant impression, impression directe via la visionneuse système.
 - **Annulation de paiement** (motif obligatoire) : historique conservé, soldes recalculés.
+- **Modification et suppression des paiements** : corriger un montant/date/mode (le numéro de reçu est conservé, le snapshot est régénéré) ou supprimer définitivement une saisie erronée — toujours avec validation du solde.
 - **Tableau de bord** : nombre d'élèves, total encaissé, total restant dû, élèves non soldés, répartition par statut et liste filtrable.
 - **Classes** : de la 6ème à la Terminale, séries A et D (14 classes par défaut, montants FCFA par classe).
 - **Interface responsive** : barre latérale repliable (auto sous 950 px), barres de filtres et d'actions qui se réorganisent en plusieurs lignes selon la largeur de la fenêtre.
@@ -45,7 +47,12 @@ app/
 │   ├── payment_service.py  # Paiements atomiques, snapshots, statistiques
 │   ├── balance_service.py  # Soldes et statuts
 │   └── receipt_service.py  # Reçus PDF depuis le snapshot figé
-└── ui/                     # PySide6 : navigation latérale, pages, thème
+├── services/               # Logique métier et validations
+│   ├── student_service.py  # CRUD élèves, matricules, année courante
+│   ├── payment_service.py  # Paiements atomiques, snapshots, statistiques
+│   ├── class_service.py    # CRUD classes + plans de frais
+│   ├── balance_service.py  # Soldes et statuts
+│   └── receipt_service.py  # Reçus PDF depuis le snapshot figé
 main.py                     # Point d'entrée (logging, DB, thème, excepthook)
 tests/test_services.py      # Tests pytest (base isolée)
 build.py                    # Packaging PyInstaller
