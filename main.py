@@ -132,6 +132,15 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
 
+    # Appliquer le thème professionnel éducatif
+    try:
+        from app.ui.theme import get_professional_theme, get_professional_stylesheet
+        app.setPalette(get_professional_theme())
+        app.setStyleSheet(get_professional_stylesheet())
+        logging.info("Thème professionnel éducatif appliqué")
+    except ImportError:
+        logging.warning("Thème professionnel non disponible, utilisation du thème par défaut")
+
     # Création et affichage de la fenêtre principale
     try:
         window = MainWindow()

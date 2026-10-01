@@ -1,14 +1,32 @@
 """
 Widget pour la liste des élèves avec recherche et filtre
+Supporte la nouvelle architecture (app/services/) avec fallback vers l'ancienne
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
                                 QTableWidgetItem, QPushButton, QLineEdit,
                                 QComboBox, QMessageBox, QHeaderView, QDialog, QLabel)
 from PySide6.QtCore import Qt
-from models.eleve import Eleve
-from services.eleve_service import EleveService
-from services.paiement_service import PaiementService
+
+# Essayer d'utiliser la nouvelle architecture
+try:
+    from app.models.student import Student
+    from app.services.student_service import StudentService
+    from app.services.payment_service import PaymentService
+    from app.services.balance_service import BalanceService
+    from app.config import format_euros, cents_to_euros
+    NEW_ARCHITECTURE = True
+    StudentModel = Student
+    StudentServiceClass = StudentService
+except ImportError:
+    # Fallback vers l'ancienne architecture
+    from models.eleve import Eleve
+    from services.eleve_service import EleveService
+    from services.paiement_service import PaiementService
+    NEW_ARCHITECTURE = False
+    StudentModel = Eleve
+    StudentServiceClass = EleveService
+
 from ui.eleve_form import EleveForm
 from ui.paiement_dialog import PaiementDialog
 from ui.eleve_details import EleveDetailWidget
@@ -16,11 +34,15 @@ from ui.eleve_details import EleveDetailWidget
 
 class EleveListWidget(QWidget):
     """Widget affichant la liste des élèves avec recherche et filtre"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.eleve_service = EleveService()
-        self.paiement_service = PaiementService()
+        self.eleve_service = StudentServiceClass()
+        if NEW_ARCHITECTURE:
+            self.paiement_service = PaymentService()
+            self.balance_service = BalanceService()
+        else:
+            self.paiement_service = PaiementService()
         self.current_eleves = []
         self.setup_ui()
         self.load_eleves()
@@ -101,27 +123,52 @@ class EleveListWidget(QWidget):
     def update_table(self):
         """Met à jour le tableau avec les élèves courants"""
         self.table.setRowCount(len(self.current_eleves))
-        
+
         for row, eleve in enumerate(self.current_eleves):
-            self.table.setItem(row, 0, QTableWidgetItem(eleve.nom))
-            self.table.setItem(row, 1, QTableWidgetItem(eleve.prenom))
-            self.table.setItem(row, 2, QTableWidgetItem(eleve.classe))
-            self.table.setItem(row, 3, QTableWidgetItem(eleve.annee_scolaire))
-            self.table.setItem(row, 4, QTableWidgetItem(f"{eleve.montant_du:.2f}"))
-            
+            # Adapter pour les deux architectures
+            if NEW_ARCHITECTURE:
+                nom = eleve.last_name
+                prenom = eleve.first_name
+                classe = str(eleve.class_id)  # Pour l'instant afficher l'ID
+                annee = "2024-2025"  # TODO: récupérer depuis school_year
+                montant_du = 0  # TODO: calculer depuis fee_plan
+            else:
+                nom = eleve.nom
+                prenom = eleve.prenom
+                classe = eleve.classe
+                annee = eleve.annee_scolaire
+                montant_du = eleve.montant_du
+
+            self.table.setItem(row, 0, QTableWidgetItem(nom))
+            self.table.setItem(row, 1, QTableWidgetItem(prenom))
+            self.table.setItem(row, 2, QTableWidgetItem(classe))
+            self.table.setItem(row, 3, QTableWidgetItem(annee))
+            self.table.setItem(row, 4, QTableWidgetItem(f"{montant_du:.2f}"))
+
             # Calculer le montant payé et le solde
             try:
-                total_paye = self.paiement_service.paiement_repo.get_total_by_eleve(eleve.id)
-                solde = eleve.montant_du - total_paye
-                statut = self.paiement_service.get_statut_paiement(eleve.id)
+                if NEW_ARCHITECTURE:
+                    # Utiliser BalanceService
+                    balance_info = self.balance_service.get_balance_info(eleve.id, 1)  # TODO: school_year_id
+                    total_paye = balance_info['total_paid_int']
+                    solde = balance_info['balance_int']
+                    statut = balance_info['status']
+                    total_paye_euros = cents_to_euros(total_paye)
+                    solde_euros = cents_to_euros(solde)
+                else:
+                    total_paye = self.paiement_service.paiement_repo.get_total_by_eleve(eleve.id)
+                    solde = eleve.montant_du - total_paye
+                    statut = self.paiement_service.get_statut_paiement(eleve.id)
+                    total_paye_euros = total_paye
+                    solde_euros = solde
             except:
-                total_paye = 0
-                solde = eleve.montant_du
+                total_paye_euros = 0
+                solde_euros = montant_du
                 statut = "Non payé"
-            
-            self.table.setItem(row, 5, QTableWidgetItem(f"{total_paye:.2f}"))
-            self.table.setItem(row, 6, QTableWidgetItem(f"{solde:.2f}"))
-            
+
+            self.table.setItem(row, 5, QTableWidgetItem(f"{total_paye_euros:.2f}"))
+            self.table.setItem(row, 6, QTableWidgetItem(f"{solde_euros:.2f}"))
+
             # Statut avec couleur
             statut_item = QTableWidgetItem(statut)
             if statut == "Soldé":
