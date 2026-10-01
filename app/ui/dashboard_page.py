@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QPushButton,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -29,6 +29,7 @@ from app.ui.widgets import (
     PageHeader,
     StatCard,
     StatusBadge,
+    make_button,
     make_card,
 )
 
@@ -62,7 +63,9 @@ class DashboardPage(QWidget):
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(14)
 
-        self.refresh_btn = QPushButton("⟳  Actualiser")
+        self.refresh_btn = make_button(
+            "Actualiser", role="secondary",
+            icon=QStyle.StandardPixmap.SP_BrowserReload)
         self.refresh_btn.clicked.connect(self.refresh)
         header = PageHeader(
             "Tableau de bord",
@@ -73,10 +76,10 @@ class DashboardPage(QWidget):
         # ---- Cartes statistiques (flow responsive : 4→2→1 selon largeur) ----
         cards_container = QWidget()
         cards = FlowLayout(cards_container, margin=0, spacing=12)
-        self.card_students = StatCard("Élèves inscrits", COLOR_PRIMARY, "👥")
-        self.card_collected = StatCard("Total encaissé", COLOR_SUCCESS, "💰")
-        self.card_remaining = StatCard("Total restant dû", COLOR_WARNING, "📉")
-        self.card_unsettled = StatCard("Élèves non soldés", COLOR_DANGER_CARD, "⚠")
+        self.card_students = StatCard("Élèves inscrits", COLOR_PRIMARY)
+        self.card_collected = StatCard("Total encaissé", COLOR_SUCCESS)
+        self.card_remaining = StatCard("Total restant dû", COLOR_WARNING)
+        self.card_unsettled = StatCard("Élèves non soldés", COLOR_DANGER_CARD)
         for card in (self.card_students, self.card_collected,
                      self.card_remaining, self.card_unsettled):
             cards.addWidget(card)
@@ -143,13 +146,13 @@ class DashboardPage(QWidget):
 
         total = max(o["nb_students"], 1)
         self.soldes_label.setText(
-            f"✔ <b style='color:{COLOR_SUCCESS};'>Soldés :</b> "
+            f"● <b style='color:{COLOR_SUCCESS};'>Soldés :</b> "
             f"{o['nb_paid']} ({o['nb_paid'] * 100 // total} %)")
         self.partiels_label.setText(
-            f"◐ <b style='color:{COLOR_WARNING};'>Partiels :</b> "
+            f"● <b style='color:{COLOR_WARNING};'>Partiels :</b> "
             f"{o['nb_partial']} ({o['nb_partial'] * 100 // total} %)")
         self.impayes_label.setText(
-            f"✘ <b style='color:{COLOR_DANGER_CARD};'>Non payés :</b> "
+            f"● <b style='color:{COLOR_DANGER_CARD};'>Non payés :</b> "
             f"{o['nb_unpaid']} ({o['nb_unpaid'] * 100 // total} %)")
 
         self._apply_filter()

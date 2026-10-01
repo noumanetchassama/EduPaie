@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -31,7 +31,9 @@ from app.ui.widgets import (
     COLOR_TEXT_SECONDARY,
     FlowLayout,
     PageHeader,
+    make_button,
     make_card,
+    make_dialog_buttons,
 )
 
 LEVELS = ["6ème", "5ème", "4ème", "3ème", "2nde", "1ère", "Tle",
@@ -82,6 +84,7 @@ class ClassForm(QDialog):
             | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Save).setText("Enregistrer")
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Annuler")
+        make_dialog_buttons(buttons)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -139,7 +142,10 @@ class ClassesPage(QWidget):
         layout.setSpacing(14)
 
         # ---- En-tête ----
-        self.add_btn = QPushButton("＋ Nouvelle classe")
+        self.add_btn = make_button(
+            "Nouvelle classe", role="success",
+            icon=QStyle.StandardPixmap.SP_FileDialogNewFolder,
+            tooltip="Créer une classe avec ses frais")
         self.add_btn.clicked.connect(self.add_class)
         header = PageHeader(
             "Classes",
@@ -165,12 +171,16 @@ class ClassesPage(QWidget):
         actions_container = QWidget()
         actions = FlowLayout(actions_container, margin=0, spacing=8)
 
-        self.edit_btn = QPushButton("Modifier")
+        self.edit_btn = make_button(
+            "Modifier", role="secondary",
+            icon=QStyle.StandardPixmap.SP_DialogSaveButton)
         self.edit_btn.clicked.connect(self.edit_class)
         self.edit_btn.setEnabled(False)
         actions.addWidget(self.edit_btn)
 
-        self.delete_btn = QPushButton("Supprimer")
+        self.delete_btn = make_button(
+            "Supprimer", role="danger",
+            icon=QStyle.StandardPixmap.SP_TrashIcon)
         self.delete_btn.clicked.connect(self.delete_class)
         self.delete_btn.setEnabled(False)
         actions.addWidget(self.delete_btn)
@@ -179,7 +189,9 @@ class ClassesPage(QWidget):
         self.count_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY};")
         actions.addWidget(self.count_label)
 
-        self.refresh_btn = QPushButton("⟳ Actualiser")
+        self.refresh_btn = make_button(
+            "Actualiser", role="secondary",
+            icon=QStyle.StandardPixmap.SP_BrowserReload)
         self.refresh_btn.clicked.connect(self.refresh)
         actions.addWidget(self.refresh_btn)
 
@@ -220,7 +232,12 @@ class ClassesPage(QWidget):
             self.table.setItem(i, 4, nb_item)
 
         self.count_label.setText(f"{len(self._rows)} classe(s)")
-        self._on_selection()
+        # Sélection automatique de la première classe : boutons actifs
+        # immédiatement.
+        if self._rows:
+            self.table.selectRow(0)
+        else:
+            self._on_selection()
 
     def _selected_row(self):
         row = self.table.currentRow()

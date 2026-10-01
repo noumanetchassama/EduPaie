@@ -4,19 +4,54 @@ badges de statut et FlowLayout (barres d'actions qui se replient en
 plusieurs lignes sur les fenêtres étroites → interface responsive).
 """
 
-import math
-
 from PySide6.QtCore import QPoint, QRect, QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
     QLayout,
+    QPushButton,
     QSizePolicy,
     QStyle,
     QVBoxLayout,
     QWidget,
 )
+
+
+def make_button(text: str, role: str = None, icon=None,
+                tooltip: str = None, parent=None) -> QPushButton:
+    """
+    Crée un bouton homogène, lisible et immédiatement cliquable.
+
+    - Icônes Qt natives (`QStyle.StandardPixmap`) : toujours rendues, quel
+      que soit le système (pas d'emoji ni de caractères exotiques).
+    - Curseur « main » pour montrer que le bouton est cliquable.
+    - `role` : None (primaire) / "secondary" / "success" / "danger" —
+      stylés par la feuille de style du thème.
+    """
+    btn = QPushButton(text, parent)
+    btn.setCursor(Qt.CursorShape.PointingHandCursor)
+    if role:
+        btn.setProperty("class", role)
+    if icon is not None:
+        btn.setIcon(btn.style().standardIcon(icon))
+        btn.setIconSize(QSize(16, 16))
+    if tooltip:
+        btn.setToolTip(tooltip)
+    return btn
+
+
+def make_dialog_buttons(button_box):
+    """Applique les rôles visuels aux boutons d'un QDialogButtonBox."""
+    from PySide6.QtWidgets import QDialogButtonBox
+    save = button_box.button(QDialogButtonBox.StandardButton.Save)
+    if save:
+        save.setProperty("class", "success")
+        save.setCursor(Qt.CursorShape.PointingHandCursor)
+    cancel = button_box.button(QDialogButtonBox.StandardButton.Cancel)
+    if cancel:
+        cancel.setProperty("class", "secondary")
+        cancel.setCursor(Qt.CursorShape.PointingHandCursor)
 
 # Couleurs du thème professionnel éducatif (cohérent avec app/ui/theme.py)
 COLOR_PRIMARY = "#2c5282"
@@ -74,7 +109,7 @@ class StatCard(QFrame):
 
     MIN_WIDTH = 210  # largeur minimale (FlowLayout responsive)
 
-    def __init__(self, title: str, color: str, icon: str = "", parent=None):
+    def __init__(self, title: str, color: str, parent=None):
         super().__init__(parent)
         self.setObjectName("statCard")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -92,7 +127,7 @@ class StatCard(QFrame):
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(2)
 
-        self.title_label = QLabel(f"{icon}  {title}" if icon else title)
+        self.title_label = QLabel(title)
         self.title_label.setStyleSheet(
             "color: rgba(255,255,255,0.85); font-size: 10pt; font-weight: 600;"
             "background: transparent; border: none;")

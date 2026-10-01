@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QHeaderView,
     QLabel,
     QMessageBox,
-    QPushButton,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -28,6 +28,7 @@ from app.ui.widgets import (
     COLOR_TEXT_SECONDARY,
     FlowLayout,
     StatusBadge,
+    make_button,
     make_card,
 )
 
@@ -109,37 +110,53 @@ class StudentDetailsDialog(QDialog):
         # ---- Actions (flow responsive : les boutons passent à la ligne) ----
         actions_container = QWidget()
         actions = FlowLayout(actions_container, margin=0, spacing=8)
-        self.receipt_btn = QPushButton("👁 Voir le reçu")
+        self.receipt_btn = make_button(
+            "Voir le reçu", role="secondary",
+            icon=QStyle.StandardPixmap.SP_FileDialogInfoView,
+            tooltip="Aperçu du reçu sélectionné")
         self.receipt_btn.clicked.connect(self.view_receipt)
         self.receipt_btn.setEnabled(False)
         actions.addWidget(self.receipt_btn)
 
-        self.download_btn = QPushButton("⬇ Télécharger le reçu (PDF)")
+        self.download_btn = make_button(
+            "Télécharger le reçu (PDF)", role="success",
+            icon=QStyle.StandardPixmap.SP_DialogSaveButton,
+            tooltip="Enregistrer le reçu en PDF")
         self.download_btn.clicked.connect(self.download_receipt)
         self.download_btn.setEnabled(False)
         actions.addWidget(self.download_btn)
 
-        self.print_btn = QPushButton("🖨 Imprimer le reçu")
+        self.print_btn = make_button(
+            "Imprimer le reçu", role="secondary",
+            icon=QStyle.StandardPixmap.SP_DialogOpenButton,
+            tooltip="Ouvrir le PDF pour impression")
         self.print_btn.clicked.connect(self.print_receipt)
         self.print_btn.setEnabled(False)
         actions.addWidget(self.print_btn)
 
-        self.cancel_btn = QPushButton("Annuler ce paiement…")
-        self.cancel_btn.clicked.connect(self.cancel_payment)
-        self.cancel_btn.setEnabled(False)
-        actions.addWidget(self.cancel_btn)
-
-        self.edit_payment_btn = QPushButton("Modifier ce paiement…")
+        self.edit_payment_btn = make_button(
+            "Modifier ce paiement…", role="secondary",
+            icon=QStyle.StandardPixmap.SP_DialogSaveButton)
         self.edit_payment_btn.clicked.connect(self.edit_payment)
         self.edit_payment_btn.setEnabled(False)
         actions.addWidget(self.edit_payment_btn)
 
-        self.delete_payment_btn = QPushButton("Supprimer ce paiement")
+        self.cancel_btn = make_button(
+            "Annuler ce paiement…", role="secondary")
+        self.cancel_btn.clicked.connect(self.cancel_payment)
+        self.cancel_btn.setEnabled(False)
+        actions.addWidget(self.cancel_btn)
+
+        self.delete_payment_btn = make_button(
+            "Supprimer ce paiement", role="danger",
+            icon=QStyle.StandardPixmap.SP_TrashIcon)
         self.delete_payment_btn.clicked.connect(self.delete_payment)
         self.delete_payment_btn.setEnabled(False)
         actions.addWidget(self.delete_payment_btn)
 
-        self.new_payment_btn = QPushButton("＋ Enregistrer un paiement")
+        self.new_payment_btn = make_button(
+            "Enregistrer un paiement",
+            icon=QStyle.StandardPixmap.SP_DialogApplyButton)
         self.new_payment_btn.clicked.connect(self.add_payment)
         actions.addWidget(self.new_payment_btn)
         layout.addWidget(actions_container)
@@ -243,7 +260,12 @@ class StudentDetailsDialog(QDialog):
             self.table.setCellWidget(row, 5, status_widget)
 
         self.table.resizeColumnsToContents()
-        self._on_selection()
+        # Sélectionner automatiquement le paiement le plus récent :
+        # les boutons de reçus sont actifs dès l'ouverture de la fiche.
+        if self.table.rowCount():
+            self.table.selectRow(0)
+        else:
+            self._on_selection()
 
     def _selected_payment(self):
         row = self.table.currentRow()

@@ -94,32 +94,47 @@ def get_professional_stylesheet() -> str:
     }
 
     /* ==================== BOUTONS ==================== */
+    /* Taille confortable, texte blanc sur bleu, icônes natives Qt
+       (via widgets.make_button) : lisibles et cliquables immédiatement. */
     QPushButton {
         background-color: #2c5282;
         color: #ffffff;
-        border: none;
+        border: 2px solid transparent;
         border-radius: 8px;
         padding: 9px 18px;
         font-weight: 600;
         font-size: 10.5pt;
-        min-height: 32px;
+        min-height: 34px;
+        min-width: 100px;
     }
     QPushButton:hover { background-color: #3b5d87; }
     QPushButton:pressed { background-color: #1a365d; }
-    QPushButton:focus { outline: none; }
+    QPushButton:focus { border: 2px solid #63b3ed; outline: none; }
     QPushButton:disabled {
-        background-color: #cbd5e0;
+        background-color: #e2e8f0;
         color: #718096;
+        border-color: #e2e8f0;
     }
 
     QPushButton[class="secondary"] { background-color: #e2e8f0; color: #2d3748; }
     QPushButton[class="secondary"]:hover { background-color: #cbd5e0; }
     QPushButton[class="secondary"]:pressed { background-color: #a0aec0; }
+    QPushButton[class="secondary"]:focus { border-color: #4299e1; }
 
-    QPushButton[class="success"] { background-color: #48bb78; }
-    QPushButton[class="success"]:hover { background-color: #38a169; }
-    QPushButton[class="danger"] { background-color: #f56565; }
-    QPushButton[class="danger"]:hover { background-color: #e53e3e; }
+    QPushButton[class="success"] { background-color: #38a169; }
+    QPushButton[class="success"]:hover { background-color: #2f855a; }
+    QPushButton[class="success"]:pressed { background-color: #276749; }
+
+    QPushButton[class="danger"] { background-color: #e53e3e; }
+    QPushButton[class="danger"]:hover { background-color: #c53030; }
+    QPushButton[class="danger"]:pressed { background-color: #9b2c2c; }
+
+    QPushButton[class="secondary"]:disabled,
+    QPushButton[class="success"]:disabled,
+    QPushButton[class="danger"]:disabled {
+        background-color: #e2e8f0;
+        color: #718096;
+    }
 
     QToolButton {
         background-color: transparent;
@@ -188,8 +203,12 @@ def get_professional_stylesheet() -> str:
     }
     QTableWidget::item, QTableView::item { padding: 6px; }
     QTableWidget::item:selected, QTableView::item:selected {
-        background-color: #4299e1;
+        background-color: #2c5282;
         color: #ffffff;
+        font-weight: 600;
+    }
+    QTableWidget:focus, QTableView:focus {
+        border: 2px solid #4299e1;
     }
     QHeaderView::section {
         background-color: #2c5282;
@@ -266,6 +285,15 @@ def get_professional_stylesheet() -> str:
 
     QMessageBox { background-color: #ffffff; }
     QMessageBox QPushButton { min-width: 96px; padding: 7px 14px; }
+
+    QToolTip {
+        background-color: #1a365d;
+        color: #ffffff;
+        border: 1px solid #2c5282;
+        border-radius: 6px;
+        padding: 6px 10px;
+        font-size: 9.5pt;
+    }
 
     QStatusBar {
         background-color: #2c5282;

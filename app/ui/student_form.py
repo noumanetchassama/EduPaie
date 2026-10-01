@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 from app.services.exceptions import EduPaieException
 from app.services.student_service import StudentService
-from app.ui.widgets import COLOR_DANGER
+from app.ui.widgets import COLOR_DANGER, make_dialog_buttons
 
 
 class StudentForm(QDialog):
@@ -111,6 +111,7 @@ class StudentForm(QDialog):
         )
         buttons.button(QDialogButtonBox.StandardButton.Save).setText("Enregistrer")
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Annuler")
+        make_dialog_buttons(buttons)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

@@ -5,7 +5,7 @@ L'application s'appuie exclusivement sur la nouvelle architecture
 (app/) : modèles, repositories, services et interface.
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QStackedWidget,
+    QStyle,
     QVBoxLayout,
     QWidget,
 )
@@ -28,10 +29,11 @@ from app.ui.dashboard_page import DashboardPage
 from app.ui.students_page import StudentsPage
 from app.ui.widgets import COLOR_BG, COLOR_PRIMARY, COLOR_PRIMARY_DARK
 
+# (clé, libellé, icône native Qt — toujours rendue, même sans emoji)
 NAV_ITEMS = [
-    ("dashboard", "Tableau de bord", "◧"),
-    ("students", "Élèves", "☰"),
-    ("classes", "Classes", "▤"),
+    ("dashboard", "Tableau de bord", QStyle.StandardPixmap.SP_ComputerIcon),
+    ("students", "Élèves", QStyle.StandardPixmap.SP_DirHomeIcon),
+    ("classes", "Classes", QStyle.StandardPixmap.SP_DirIcon),
 ]
 
 
@@ -86,7 +88,7 @@ class MainWindow(QMainWindow):
                 background: transparent;
             }}
             QPushButton#navButton {{
-                color: rgba(255,255,255,0.85);
+                color: rgba(255,255,255,0.92);
                 background-color: transparent;
                 border: none;
                 border-radius: 8px;
@@ -94,6 +96,7 @@ class MainWindow(QMainWindow):
                 font-size: 11pt;
                 font-weight: 500;
                 text-align: left;
+                min-width: 0px;
             }}
             QPushButton#navButton:hover {{
                 background-color: rgba(255,255,255,0.12);
@@ -102,6 +105,17 @@ class MainWindow(QMainWindow):
                 background-color: {COLOR_PRIMARY};
                 color: #ffffff;
                 font-weight: 600;
+            }}
+            QPushButton#sidebarToggle {{
+                color: #ffffff;
+                background-color: transparent;
+                border: none;
+                border-radius: 8px;
+                padding: 2px;
+                min-width: 0px;
+            }}
+            QPushButton#sidebarToggle:hover {{
+                background-color: rgba(255,255,255,0.15);
             }}
             QScrollArea#navScroll {{
                 background: transparent;
@@ -122,10 +136,11 @@ class MainWindow(QMainWindow):
         brand.setObjectName("brandTitle")
         brand_row.addWidget(brand)
         brand_row.addStretch()
-        self.toggle_btn = QPushButton("☰")
-        self.toggle_btn.setObjectName("navButton")
+        self.toggle_btn = QPushButton()
+        self.toggle_btn.setObjectName("sidebarToggle")
         self.toggle_btn.setCheckable(False)
-        self.toggle_btn.setFixedWidth(36)
+        self.toggle_btn.setFixedSize(34, 34)
+        self.toggle_btn.setIconSize(QSize(18, 18))
         self.toggle_btn.setToolTip("Replier / déplier le menu")
         self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.toggle_btn.clicked.connect(self.toggle_sidebar)
@@ -151,10 +166,13 @@ class MainWindow(QMainWindow):
 
         self._nav_buttons = {}
         for key, label, icon in NAV_ITEMS:
-            btn = QPushButton(f"{icon}   {label}")
+            btn = QPushButton(label)
             btn.setObjectName("navButton")
+            btn.setIcon(self.style().standardIcon(icon))
+            btn.setIconSize(QSize(18, 18))
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setToolTip(label)
             btn.clicked.connect(lambda _=False, k=key: self._navigate(k))
             nav_layout.addWidget(btn)
             self._nav_buttons[key] = btn
@@ -211,12 +229,17 @@ class MainWindow(QMainWindow):
 
         for (key, label, icon), btn in zip(
                 NAV_ITEMS, self._nav_buttons.values()):
-            btn.setText(f"{icon}   {label}" if self._sidebar_expanded else icon)
-            btn.setToolTip(label if not self._sidebar_expanded else "")
+            btn.setText(label if self._sidebar_expanded else "")
+            btn.setProperty("collapsed", not self._sidebar_expanded)
+            btn.setToolTip(label)
+            btn.style().unpolish(btn)
+            btn.style().polish(btn)
 
         self.brand_sub.setVisible(self._sidebar_expanded)
         self.school_year_label.setVisible(self._sidebar_expanded)
-        self.toggle_btn.setText("☰" if self._sidebar_expanded else "›")
+        arrow = (QStyle.StandardPixmap.SP_ArrowLeft if self._sidebar_expanded
+                 else QStyle.StandardPixmap.SP_ArrowRight)
+        self.toggle_btn.setIcon(self.style().standardIcon(arrow))
 
     def resizeEvent(self, event):
         """Replie automatiquement la barre latérale sous 950 px de large."""

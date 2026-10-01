@@ -27,6 +27,7 @@ from app.ui.widgets import (
     COLOR_SUCCESS,
     COLOR_TEXT_SECONDARY,
     make_card,
+    make_dialog_buttons,
 )
 
 
@@ -104,6 +105,7 @@ class PaymentDialog(QDialog):
         self.save_btn = self.buttons.button(QDialogButtonBox.StandardButton.Save)
         self.save_btn.setText("Enregistrer le paiement")
         self.buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Annuler")
+        make_dialog_buttons(self.buttons)
         self.buttons.accepted.connect(self._save)
         self.buttons.rejected.connect(self.reject)
         layout.addWidget(self.buttons)
@@ -152,7 +154,7 @@ class PaymentDialog(QDialog):
         remaining = self._balance - amount_int
         if remaining < 0:
             self.warning_label.setText(
-                "⚠ Le montant saisi dépasse le solde restant : le solde ne peut "
+                "Le montant saisi dépasse le solde restant : le solde ne peut "
                 "pas devenir négatif. Enregistrement refusé."
             )
             self.warning_label.show()

@@ -23,7 +23,7 @@ from app.services.balance_service import BalanceService
 from app.services.exceptions import EduPaieException
 from app.services.payment_service import PaymentService
 from app.services.student_service import StudentService
-from app.ui.widgets import COLOR_TEXT_SECONDARY
+from app.ui.widgets import COLOR_TEXT_SECONDARY, make_dialog_buttons
 
 
 class PaymentEditDialog(QDialog):
@@ -89,6 +89,7 @@ class PaymentEditDialog(QDialog):
             | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Save).setText("Enregistrer")
         buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Annuler")
+        make_dialog_buttons(buttons)
         buttons.accepted.connect(self._save)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

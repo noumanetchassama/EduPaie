@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QMessageBox,
-    QPushButton,
+    QStyle,
     QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
@@ -32,6 +32,7 @@ from app.ui.widgets import (
     FlowLayout,
     PageHeader,
     StatusBadge,
+    make_button,
     make_card,
 )
 
@@ -68,7 +69,10 @@ class StudentsPage(QWidget):
         layout.setSpacing(14)
 
         # ---- En-tête ----
-        self.add_btn = QPushButton("＋ Nouvel élève")
+        self.add_btn = make_button(
+            "Nouvel élève", role="success",
+            icon=QStyle.StandardPixmap.SP_FileDialogNewFolder,
+            tooltip="Ajouter un nouvel élève")
         self.add_btn.clicked.connect(self.add_student)
         header = PageHeader(
             "Élèves",
@@ -82,7 +86,7 @@ class StudentsPage(QWidget):
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText(
-            "🔍  Rechercher un élève (nom, prénom, matricule)…")
+            "Rechercher un élève (nom, prénom, matricule)…")
         self.search_edit.textChanged.connect(self._apply_filters)
         self.search_edit.setMinimumWidth(220)
         self.search_edit.setMaximumWidth(420)
@@ -125,22 +129,32 @@ class StudentsPage(QWidget):
         actions_container = QWidget()
         actions = FlowLayout(actions_container, margin=0, spacing=8)
 
-        self.pay_btn = QPushButton("Enregistrer un paiement")
+        self.pay_btn = make_button(
+            "Enregistrer un paiement",
+            icon=QStyle.StandardPixmap.SP_DialogApplyButton,
+            tooltip="Enregistrer un paiement pour l'élève sélectionné")
         self.pay_btn.clicked.connect(self.record_payment)
         self.pay_btn.setEnabled(False)
         actions.addWidget(self.pay_btn)
 
-        self.details_btn = QPushButton("Voir la fiche")
+        self.details_btn = make_button(
+            "Voir la fiche", role="secondary",
+            icon=QStyle.StandardPixmap.SP_FileDialogInfoView,
+            tooltip="Consulter la fiche et l'historique des paiements")
         self.details_btn.clicked.connect(self.view_details)
         self.details_btn.setEnabled(False)
         actions.addWidget(self.details_btn)
 
-        self.edit_btn = QPushButton("Modifier")
+        self.edit_btn = make_button(
+            "Modifier", role="secondary",
+            icon=QStyle.StandardPixmap.SP_DialogSaveButton)
         self.edit_btn.clicked.connect(self.edit_student)
         self.edit_btn.setEnabled(False)
         actions.addWidget(self.edit_btn)
 
-        self.delete_btn = QPushButton("Supprimer")
+        self.delete_btn = make_button(
+            "Supprimer", role="danger",
+            icon=QStyle.StandardPixmap.SP_TrashIcon)
         self.delete_btn.clicked.connect(self.delete_student)
         self.delete_btn.setEnabled(False)
         actions.addWidget(self.delete_btn)
@@ -149,7 +163,9 @@ class StudentsPage(QWidget):
         self.count_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY};")
         actions.addWidget(self.count_label)
 
-        self.refresh_btn = QPushButton("⟳ Actualiser")
+        self.refresh_btn = make_button(
+            "Actualiser", role="secondary",
+            icon=QStyle.StandardPixmap.SP_BrowserReload)
         self.refresh_btn.clicked.connect(self.refresh)
         actions.addWidget(self.refresh_btn)
 
@@ -219,6 +235,14 @@ class StudentsPage(QWidget):
         self._fill_table(rows)
 
     def _fill_table(self, rows):
+        # Conserver la sélection courante si elle existe encore
+        selected_id = None
+        row = self.table.currentRow()
+        if row >= 0:
+            item = self.table.item(row, 0)
+            if item:
+                selected_id = item.data(Qt.ItemDataRole.UserRole)
+
         self.table.setRowCount(len(rows))
         for i, r in enumerate(rows):
             s = r["student"]
@@ -242,10 +266,21 @@ class StudentsPage(QWidget):
             badge = StatusBadge(r["status"])
             self.table.setCellWidget(i, 7, badge)
 
+        # Sélectionner automatiquement la 1re ligne (ou l'ancienne) : les
+        # boutons d'action sont donc cliquables immédiatement.
+        if rows:
+            target = 0
+            for i in range(self.table.rowCount()):
+                if self.table.item(i, 0).data(Qt.ItemDataRole.UserRole) == selected_id:
+                    target = i
+                    break
+            self.table.selectRow(target)
+        else:
+            self._on_selection()
+
         total = len(self._rows)
         shown = len(rows)
         self.count_label.setText(f"{shown} élève(s) affiché(s) sur {total}")
-        self._on_selection()
 
     def _selected_row(self):
         row = self.table.currentRow()
