@@ -324,11 +324,11 @@ class MainWindow(QMainWindow):
         self.toggle_btn.setIcon(self.style().standardIcon(arrow))
 
     def resizeEvent(self, event):
-        """Replie automatiquement la barre latérale sous 950 px de large."""
+        """Replie automatiquement la barre latérale sous 1000 px de large."""
         super().resizeEvent(event)
-        if self.width() < 950 and self._sidebar_expanded:
+        if self.width() < 1000 and self._sidebar_expanded:
             self.toggle_sidebar()
-        elif self.width() >= 950 and not self._sidebar_expanded:
+        elif self.width() >= 1000 and not self._sidebar_expanded:
             self.toggle_sidebar()
 
     # ------------------------------------------------------------------

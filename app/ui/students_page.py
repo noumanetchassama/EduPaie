@@ -65,8 +65,8 @@ class StudentsPage(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(14)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
 
         # ---- En-tête ----
         self.add_btn = make_button(
@@ -82,7 +82,7 @@ class StudentsPage(QWidget):
 
         # ---- Barre de recherche / filtres (flow responsive) ----
         filters_container = QWidget()
-        filters = FlowLayout(filters_container, margin=10, spacing=10)
+        filters = FlowLayout(filters_container, margin=10, spacing=12)
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText(
@@ -97,14 +97,18 @@ class StudentsPage(QWidget):
         self.class_combo.setSizeAdjustPolicy(
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.class_combo.currentIndexChanged.connect(self._apply_filters)
-        filters.addWidget(QLabel("Classe :"))
+        class_label = QLabel("Classe :")
+        class_label.setStyleSheet("font-weight: 600; font-size: 10pt;")
+        filters.addWidget(class_label)
         filters.addWidget(self.class_combo)
 
         self.status_combo = QComboBox()
         for label in STATUS_FILTERS:
             self.status_combo.addItem(label)
         self.status_combo.currentIndexChanged.connect(self._apply_filters)
-        filters.addWidget(QLabel("Statut :"))
+        status_label = QLabel("Statut :")
+        status_label.setStyleSheet("font-weight: 600; font-size: 10pt;")
+        filters.addWidget(status_label)
         filters.addWidget(self.status_combo)
 
         layout.addWidget(make_card(filters_container.layout()))
@@ -118,16 +122,22 @@ class StudentsPage(QWidget):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
         self.table.setAlternatingRowColors(True)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.horizontalHeader().setStretchLastSection(False)
         self.table.doubleClicked.connect(lambda _: self.view_details())
         layout.addWidget(self.table, 1)
 
         # ---- Barre d'actions (flow responsive : se replie en colonnes) ----
         actions_container = QWidget()
-        actions = FlowLayout(actions_container, margin=0, spacing=8)
+        actions = FlowLayout(actions_container, margin=0, spacing=10)
 
         self.pay_btn = make_button(
             "Enregistrer un paiement",
@@ -160,7 +170,7 @@ class StudentsPage(QWidget):
         actions.addWidget(self.delete_btn)
 
         self.count_label = QLabel("")
-        self.count_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY};")
+        self.count_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-size: 10pt;")
         actions.addWidget(self.count_label)
 
         self.refresh_btn = make_button(
@@ -381,6 +391,14 @@ class StudentsPage(QWidget):
         dlg = PaymentDialog(self.payment_service, self.balance_service,
                             self.student_service, sel["student"], parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
+            if dlg.created_payment:
+                QMessageBox.information(
+                    self,
+                    "Paiement enregistré",
+                    "Le paiement a bien été enregistré.\n\n"
+                    f"Numéro de reçu : {dlg.created_payment.receipt_no}\n"
+                    f"Montant : {format_euros(dlg.created_payment.amount_int)}",
+                )
             self.refresh()
             self._notify_change()
 

@@ -101,11 +101,11 @@ def get_professional_stylesheet() -> str:
         color: #ffffff;
         border: 2px solid transparent;
         border-radius: 8px;
-        padding: 9px 18px;
+        padding: 10px 20px;
         font-weight: 600;
-        font-size: 10.5pt;
-        min-height: 34px;
-        min-width: 100px;
+        font-size: 10pt;
+        min-height: 38px;
+        min-width: 140px;
     }
     QPushButton:hover { background-color: #3b5d87; }
     QPushButton:pressed { background-color: #1a365d; }
@@ -136,6 +136,12 @@ def get_professional_stylesheet() -> str:
         color: #718096;
     }
 
+    QDialogButtonBox QPushButton {
+        min-width: 120px;
+        padding: 10px 20px;
+        min-height: 38px;
+    }
+
     QToolButton {
         background-color: transparent;
         border: 1px solid #cbd5e0;
@@ -149,9 +155,10 @@ def get_professional_stylesheet() -> str:
         background-color: #ffffff;
         border: 2px solid #e2e8f0;
         border-radius: 6px;
-        padding: 7px 11px;
+        padding: 8px 12px;
         selection-background-color: #4299e1;
         selection-color: #ffffff;
+        font-size: 10pt;
     }
     QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {
         border: 2px solid #4299e1;
@@ -167,8 +174,9 @@ def get_professional_stylesheet() -> str:
         background-color: #ffffff;
         border: 2px solid #e2e8f0;
         border-radius: 6px;
-        padding: 7px 11px;
-        min-height: 26px;
+        padding: 8px 12px;
+        min-height: 28px;
+        font-size: 10pt;
     }
     QComboBox:hover { border: 2px solid #cbd5e0; }
     QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus {
@@ -187,6 +195,7 @@ def get_professional_stylesheet() -> str:
         border: 1px solid #e2e8f0;
         selection-background-color: #4299e1;
         selection-color: #ffffff;
+        font-size: 10pt;
     }
 
     QCalendarWidget QWidget { alternate-background-color: #edf2f7; }
@@ -283,8 +292,17 @@ def get_professional_stylesheet() -> str:
 
     QLabel { color: #2d3748; }
 
-    QMessageBox { background-color: #ffffff; }
-    QMessageBox QPushButton { min-width: 96px; padding: 7px 14px; }
+    QMessageBox {
+        background-color: #ffffff;
+        min-width: 420px;
+    }
+    QMessageBox QLabel {
+        padding: 12px 24px;
+        font-size: 10pt;
+    }
+    QMessageBox QDialogButtonBox {
+        padding: 12px 24px 24px 24px;
+    }
 
     QToolTip {
         background-color: #1a365d;

@@ -30,11 +30,14 @@ class StudentForm(QDialog):
         self.created_student = None
 
         self.setWindowTitle("Modifier l'élève" if student else "Nouvel élève")
-        self.setMinimumWidth(460)
+        self.setMinimumWidth(480)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
         form = QFormLayout()
-        form.setSpacing(10)
+        form.setSpacing(12)
+        form.setContentsMargins(0, 0, 0, 0)
 
         # Matricule (auto si vide)
         self.matricule_edit = QLineEdit()

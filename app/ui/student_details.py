@@ -60,7 +60,7 @@ class StudentDetailsDialog(QDialog):
         self.year = None
 
         self.setWindowTitle("Fiche élève")
-        self.setMinimumSize(880, 620)
+        self.setMinimumSize(950, 680)
         self._build_ui()
         self.reload()
 
@@ -68,7 +68,8 @@ class StudentDetailsDialog(QDialog):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        layout.setContentsMargins(18, 18, 18, 18)
+        layout.setSpacing(14)
 
         # ---- En-tête : identité + solde ----
         header_layout = QHBoxLayout()
@@ -104,15 +105,19 @@ class StudentDetailsDialog(QDialog):
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
         self.table.verticalHeader().setVisible(False)
         self.table.itemSelectionChanged.connect(self._on_selection)
         layout.addWidget(self.table, 1)
 
         # ---- Actions (flow responsive : les boutons passent à la ligne) ----
         actions_container = QWidget()
-        actions = FlowLayout(actions_container, margin=0, spacing=8)
+        actions = FlowLayout(actions_container, margin=0, spacing=12)
         self.receipt_btn = make_button(
             "Voir le reçu", role="secondary",
             icon=QStyle.StandardPixmap.SP_FileDialogInfoView,
@@ -122,7 +127,7 @@ class StudentDetailsDialog(QDialog):
         actions.addWidget(self.receipt_btn)
 
         self.download_btn = make_button(
-            "Télécharger le reçu (PDF)", role="success",
+            "Télécharger reçu PDF", role="success",
             icon=QStyle.StandardPixmap.SP_DialogSaveButton,
             tooltip="Enregistrer le reçu en PDF")
         self.download_btn.clicked.connect(self.download_receipt)
@@ -138,33 +143,33 @@ class StudentDetailsDialog(QDialog):
         actions.addWidget(self.print_btn)
 
         self.edit_payment_btn = make_button(
-            "Modifier ce paiement…", role="secondary",
+            "Modifier paiement…", role="secondary",
             icon=QStyle.StandardPixmap.SP_DialogSaveButton)
         self.edit_payment_btn.clicked.connect(self.edit_payment)
         self.edit_payment_btn.setEnabled(False)
         actions.addWidget(self.edit_payment_btn)
 
         self.cancel_btn = make_button(
-            "Annuler ce paiement…", role="secondary")
+            "Annuler paiement…", role="secondary")
         self.cancel_btn.clicked.connect(self.cancel_payment)
         self.cancel_btn.setEnabled(False)
         actions.addWidget(self.cancel_btn)
 
         self.delete_payment_btn = make_button(
-            "Supprimer ce paiement", role="danger",
+            "Supprimer paiement", role="danger",
             icon=QStyle.StandardPixmap.SP_TrashIcon)
         self.delete_payment_btn.clicked.connect(self.delete_payment)
         self.delete_payment_btn.setEnabled(False)
         actions.addWidget(self.delete_payment_btn)
 
         self.new_payment_btn = make_button(
-            "Enregistrer un paiement",
+            "Enregistrer paiement",
             icon=QStyle.StandardPixmap.SP_DialogApplyButton)
         self.new_payment_btn.clicked.connect(self.add_payment)
         actions.addWidget(self.new_payment_btn)
 
         self.move_btn = make_button(
-            "Déplacer vers une autre classe…", role="secondary",
+            "Déplacer classe…", role="secondary",
             icon=QStyle.StandardPixmap.SP_ArrowForward,
             tooltip="Transférer l'élève vers une autre classe de l'année courante")
         self.move_btn.clicked.connect(self.move_student_dialog)
@@ -300,12 +305,14 @@ class StudentDetailsDialog(QDialog):
 
             status_widget = QWidget()
             lay = QHBoxLayout(status_widget)
-            lay.setContentsMargins(4, 2, 4, 2)
+            lay.setContentsMargins(6, 4, 6, 4)
             badge = StatusBadge("Valide" if p.is_valid else "Annulé")
             lay.addWidget(badge)
             self.table.setCellWidget(row, 5, status_widget)
 
         self.table.resizeColumnsToContents()
+        # Ajuster la colonne Solde après pour qu'elle ne soit pas trop large
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
         # Sélectionner automatiquement le paiement le plus récent :
         # les boutons de reçus sont actifs dès l'ouverture de la fiche.
         if self.table.rowCount():
@@ -400,9 +407,18 @@ class StudentDetailsDialog(QDialog):
         dlg = PaymentDialog(
             self.payment_service, self.balance_service,
             self.student_service, self.student, parent=self)
-        if dlg.exec() == QDialog.DialogCode.Accepted and self.on_changed:
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            if dlg.created_payment:
+                QMessageBox.information(
+                    self,
+                    "Paiement enregistré",
+                    "Le paiement a bien été enregistré.\n\n"
+                    f"Numéro de reçu : {dlg.created_payment.receipt_no}\n"
+                    f"Montant : {format_euros(dlg.created_payment.amount_int)}",
+                )
             self.reload()
-            self.on_changed()
+            if self.on_changed:
+                self.on_changed()
 
     def move_student_dialog(self):
         """Déplace l'élève vers une autre classe (liste de l'année courante)."""

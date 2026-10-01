@@ -71,12 +71,14 @@ COLOR_BORDER = "#e2e8f0"
 def status_colors(status: str):
     """Retourne (couleur texte, couleur fond) associées à un statut de paiement."""
     if status == "Soldé":
-        return COLOR_SUCCESS, "#e6f4ea"
+        return COLOR_SUCCESS, "#d4edda"
     if status == "Partiellement payé":
-        return COLOR_WARNING, "#fdf1e3"
+        return COLOR_WARNING, "#fff3cd"
+    if status == "Non payé":
+        return COLOR_DANGER, "#f8d7da"
     if status == "En retard":
-        return COLOR_DANGER, "#fdeaea"
-    return COLOR_DANGER, "#fdeaea"
+        return COLOR_DANGER, "#f8d7da"
+    return COLOR_TEXT_SECONDARY, "#e2e8f0"
 
 
 class StatusBadge(QLabel):
@@ -95,13 +97,15 @@ class StatusBadge(QLabel):
             QLabel {{
                 color: {fg};
                 background-color: {bg};
-                border-radius: 10px;
-                padding: 4px 12px;
+                border-radius: 12px;
+                padding: 6px 16px;
                 font-weight: 600;
-                font-size: 10pt;
+                font-size: 9.5pt;
+                border: 1px solid {fg};
             }}
             """
         )
+        self.setMinimumWidth(80)
 
 
 class StatCard(QFrame):
@@ -210,11 +214,11 @@ def make_card(child_layout) -> QFrame:
         QFrame#card {{
             background-color: {COLOR_SURFACE};
             border: 1px solid {COLOR_BORDER};
-            border-radius: 10px;
+            border-radius: 12px;
         }}
         """
     )
-    child_layout.setContentsMargins(14, 14, 14, 14)
+    child_layout.setContentsMargins(16, 16, 16, 16)
     card.setLayout(child_layout)
     return card
 
@@ -226,7 +230,7 @@ class FlowLayout(QLayout):
     Implémentation canonique Qt adaptée à PySide6.
     """
 
-    def __init__(self, parent=None, margin=0, spacing=8):
+    def __init__(self, parent=None, margin=0, spacing=10):
         super().__init__(parent)
         if parent is not None:
             self.setContentsMargins(margin, margin, margin, margin)

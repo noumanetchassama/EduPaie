@@ -45,28 +45,30 @@ class PaymentDialog(QDialog):
         self._overpayment_accepted = False
 
         self.setWindowTitle(f"Enregistrer un paiement — {student.first_name} {student.last_name}")
-        self.setMinimumWidth(500)
+        self.setMinimumWidth(520)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
 
         # ---- Carte élève + solde ----
         info_layout = QVBoxLayout()
-        info_layout.setSpacing(6)
+        info_layout.setSpacing(8)
         self.student_label = QLabel()
-        self.student_label.setStyleSheet("font-size: 12pt; font-weight: 700;")
+        self.student_label.setStyleSheet("font-size: 13pt; font-weight: 700;")
         info_layout.addWidget(self.student_label)
         self.detail_label = QLabel()
-        self.detail_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY};")
+        self.detail_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-size: 10pt;")
         info_layout.addWidget(self.detail_label)
         self.solde_label = QLabel()
-        self.solde_label.setStyleSheet("font-size: 13pt; font-weight: 700;")
+        self.solde_label.setStyleSheet("font-size: 14pt; font-weight: 700;")
         info_layout.addWidget(self.solde_label)
         layout.addWidget(make_card(info_layout))
 
         # ---- Formulaire ----
         form = QFormLayout()
-        form.setSpacing(10)
+        form.setSpacing(12)
+        form.setContentsMargins(0, 0, 0, 0)
 
         self.amount_edit = QLineEdit()
         self.amount_edit.setPlaceholderText("Ex : 25 000")
@@ -93,7 +95,7 @@ class PaymentDialog(QDialog):
         # ---- Avertissement dynamique ----
         self.warning_label = QLabel("")
         self.warning_label.setWordWrap(True)
-        self.warning_label.setStyleSheet(f"color: {COLOR_DANGER}; font-weight: 600;")
+        self.warning_label.setStyleSheet(f"color: {COLOR_DANGER}; font-weight: 600; font-size: 10pt;")
         self.warning_label.hide()
         layout.addWidget(self.warning_label)
 
@@ -194,11 +196,4 @@ class PaymentDialog(QDialog):
             QMessageBox.critical(self, "Paiement refusé", str(e))
             return
 
-        QMessageBox.information(
-            self,
-            "Paiement enregistré",
-            "Le paiement a bien été enregistré.\n\n"
-            f"Numéro de reçu : {self.created_payment.receipt_no}\n"
-            f"Montant : {format_euros(self.created_payment.amount_int)}",
-        )
         self.accept()
