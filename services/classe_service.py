@@ -45,9 +45,9 @@ class ClasseService:
         # Vérifier si la classe a des élèves
         eleves = self.eleve_repo.get_all()
         for eleve in eleves:
-            if eleve.classe_id == classe_id:
+            if eleve.classe == self.classe_repo.get_by_id(classe_id).nom:
                 raise ValueError("Impossible de supprimer une classe qui contient des élèves")
-        
+
         return self.classe_repo.delete(classe_id)
     
     def get_classe(self, classe_id: int) -> Classe:

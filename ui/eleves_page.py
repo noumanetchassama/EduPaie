@@ -2,9 +2,9 @@
 Widget pour la liste des élèves avec recherche et filtre
 """
 
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget, 
-                                QTableWidgetItem, QPushButton, QLineEdit, 
-                                QComboBox, QMessageBox, QHeaderView, QDialog)
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
+                                QTableWidgetItem, QPushButton, QLineEdit,
+                                QComboBox, QMessageBox, QHeaderView, QDialog, QLabel)
 from PySide6.QtCore import Qt
 from models.eleve import Eleve
 from services.eleve_service import EleveService

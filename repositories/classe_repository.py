@@ -1,5 +1,5 @@
 """
-Repository pour la gestion des élèves (DAO).
+Repository pour la gestion des classes (DAO).
 
 Ce fichier contient uniquement les accès aux données SQLite.
 Aucune logique d'interface graphique ne doit se trouver ici.
@@ -7,89 +7,59 @@ Aucune logique d'interface graphique ne doit se trouver ici.
 
 from typing import Optional
 
-from models.eleve import Eleve
+from models.classe import Classe
 from utils.database import Database
 
 
-class EleveRepository:
-    """Repository pour les opérations CRUD sur les élèves."""
+class ClasseRepository:
+    """Repository pour les opérations CRUD sur les classes."""
 
     def __init__(self, db=None):
         self.db = db if db is not None else Database()
 
-    # ==========================================================
-    # AJOUTER
-    # ==========================================================
-
-    def add(self, eleve: Eleve) -> int:
+    def add(self, classe: Classe) -> int:
         """
-        Ajoute un élève dans la base de données.
+        Ajoute une classe dans la base de données.
 
         Returns:
-            int: Identifiant de l'élève créé.
+            int: Identifiant de la classe créée.
         """
-
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
         try:
             cursor.execute(
                 """
-                INSERT INTO eleves (
-                    nom,
-                    prenom,
-                    classe,
-                    annee_scolaire,
-                    montant_total
-                )
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO classes (nom, niveau, annee_scolaire)
+                VALUES (?, ?, ?)
                 """,
-                (
-                    eleve.nom,
-                    eleve.prenom,
-                    eleve.classe,
-                    eleve.annee_scolaire,
-                    eleve.montant_total,
-                )
+                (classe.nom, classe.niveau, classe.annee_scolaire)
             )
 
             conn.commit()
-
             return cursor.lastrowid
 
         except Exception:
             conn.rollback()
             raise
 
-    # ==========================================================
-    # RECHERCHER PAR ID
-    # ==========================================================
-
-    def get_by_id(self, eleve_id: int) -> Optional[Eleve]:
+    def get_by_id(self, classe_id: int) -> Optional[Classe]:
         """
-        Récupère un élève à partir de son identifiant.
+        Récupère une classe à partir de son identifiant.
 
         Returns:
-            Eleve | None: L'élève trouvé ou None s'il n'existe pas.
+            Classe | None: La classe trouvée ou None si elle n'existe pas.
         """
-
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
         cursor.execute(
             """
-            SELECT
-                id,
-                nom,
-                prenom,
-                classe,
-                annee_scolaire,
-                montant_total,
-                date_creation
-            FROM eleves
+            SELECT id, nom, niveau, annee_scolaire, date_creation
+            FROM classes
             WHERE id = ?
             """,
-            (eleve_id,)
+            (classe_id,)
         )
 
         row = cursor.fetchone()
@@ -97,53 +67,33 @@ class EleveRepository:
         if row is None:
             return None
 
-        return self._row_to_eleve(row)
+        return self._row_to_classe(row)
 
-    # ==========================================================
-    # RÉCUPÉRER TOUS LES ÉLÈVES
-    # ==========================================================
-
-    def get_all(self) -> list[Eleve]:
-        """Récupère tous les élèves."""
-
+    def get_all(self) -> list[Classe]:
+        """Récupère toutes les classes."""
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
         cursor.execute(
             """
-            SELECT
-                id,
-                nom,
-                prenom,
-                classe,
-                annee_scolaire,
-                montant_total,
-                date_creation
-            FROM eleves
-            ORDER BY nom COLLATE NOCASE, prenom COLLATE NOCASE
+            SELECT id, nom, niveau, annee_scolaire, date_creation
+            FROM classes
+            ORDER BY nom COLLATE NOCASE
             """
         )
 
         rows = cursor.fetchall()
+        return [self._row_to_classe(row) for row in rows]
 
-        return [self._row_to_eleve(row) for row in rows]
-
-    # ==========================================================
-    # MODIFIER
-    # ==========================================================
-
-    def update(self, eleve: Eleve) -> bool:
+    def update(self, classe: Classe) -> bool:
         """
-        Met à jour les informations d'un élève.
+        Met à jour les informations d'une classe.
 
         Returns:
             bool: True si une ligne a été modifiée, sinon False.
         """
-
-        if eleve.id is None:
-            raise ValueError(
-                "Impossible de modifier un élève sans identifiant."
-            )
+        if classe.id is None:
+            raise ValueError("Impossible de modifier une classe sans identifiant.")
 
         conn = self.db.get_connection()
         cursor = conn.cursor()
@@ -151,77 +101,50 @@ class EleveRepository:
         try:
             cursor.execute(
                 """
-                UPDATE eleves
-                SET
-                    nom = ?,
-                    prenom = ?,
-                    classe = ?,
-                    annee_scolaire = ?,
-                    montant_total = ?
+                UPDATE classes
+                SET nom = ?, niveau = ?, annee_scolaire = ?
                 WHERE id = ?
                 """,
-                (
-                    eleve.nom,
-                    eleve.prenom,
-                    eleve.classe,
-                    eleve.annee_scolaire,
-                    eleve.montant_total,
-                    eleve.id,
-                )
+                (classe.nom, classe.niveau, classe.annee_scolaire, classe.id)
             )
 
             conn.commit()
-
             return cursor.rowcount > 0
 
         except Exception:
             conn.rollback()
             raise
 
-    # ==========================================================
-    # SUPPRIMER
-    # ==========================================================
-
-    def delete(self, eleve_id: int) -> bool:
+    def delete(self, classe_id: int) -> bool:
         """
-        Supprime un élève.
+        Supprime une classe.
 
         Returns:
-            bool: True si l'élève a été supprimé, sinon False.
+            bool: True si la classe a été supprimée, sinon False.
         """
-
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
         try:
             cursor.execute(
                 """
-                DELETE FROM eleves
+                DELETE FROM classes
                 WHERE id = ?
                 """,
-                (eleve_id,)
+                (classe_id,)
             )
 
             conn.commit()
-
             return cursor.rowcount > 0
 
         except Exception:
             conn.rollback()
             raise
 
-    # ==========================================================
-    # RECHERCHE
-    # ==========================================================
-
-    def search(self, query: str) -> list[Eleve]:
+    def search(self, query: str) -> list[Classe]:
         """
-        Recherche un élève par :
-        - nom
-        - prénom
-        - classe
+        Recherche une classe par nom ou niveau.
         """
-
         if query is None:
             return []
 
@@ -237,118 +160,43 @@ class EleveRepository:
 
         cursor.execute(
             """
-            SELECT
-                id,
-                nom,
-                prenom,
-                classe,
-                annee_scolaire,
-                montant_total,
-                date_creation
-            FROM eleves
-            WHERE
-                nom LIKE ?
-                OR prenom LIKE ?
-                OR classe LIKE ?
-            ORDER BY
-                nom COLLATE NOCASE,
-                prenom COLLATE NOCASE
+            SELECT id, nom, niveau, annee_scolaire, date_creation
+            FROM classes
+            WHERE nom LIKE ? OR niveau LIKE ?
+            ORDER BY nom COLLATE NOCASE
             """,
-            (
-                search_pattern,
-                search_pattern,
-                search_pattern,
-            )
+            (search_pattern, search_pattern)
         )
 
         rows = cursor.fetchall()
+        return [self._row_to_classe(row) for row in rows]
 
-        return [self._row_to_eleve(row) for row in rows]
-
-    # ==========================================================
-    # FILTRER PAR CLASSE
-    # ==========================================================
-
-    def filter_by_classe(self, classe: str) -> list[Eleve]:
-        """Récupère les élèves d'une classe."""
-
-        if classe is None:
-            return []
-
-        classe = classe.strip()
-
-        if not classe:
-            return self.get_all()
-
+    def get_by_annee(self, annee_scolaire: str) -> list[Classe]:
+        """Récupère les classes d'une année scolaire."""
         conn = self.db.get_connection()
         cursor = conn.cursor()
 
         cursor.execute(
             """
-            SELECT
-                id,
-                nom,
-                prenom,
-                classe,
-                annee_scolaire,
-                montant_total,
-                date_creation
-            FROM eleves
-            WHERE classe = ?
-            ORDER BY
-                nom COLLATE NOCASE,
-                prenom COLLATE NOCASE
+            SELECT id, nom, niveau, annee_scolaire, date_creation
+            FROM classes
+            WHERE annee_scolaire = ?
+            ORDER BY nom COLLATE NOCASE
             """,
-            (classe,)
+            (annee_scolaire,)
         )
 
         rows = cursor.fetchall()
-
-        return [self._row_to_eleve(row) for row in rows]
-
-    # ==========================================================
-    # RÉCUPÉRER LES CLASSES
-    # ==========================================================
-
-    def get_classes(self) -> list[str]:
-        """Récupère la liste des classes uniques."""
-
-        conn = self.db.get_connection()
-        cursor = conn.cursor()
-
-        cursor.execute(
-            """
-            SELECT DISTINCT classe
-            FROM eleves
-            WHERE classe IS NOT NULL
-              AND TRIM(classe) != ''
-            ORDER BY classe COLLATE NOCASE
-            """
-        )
-
-        rows = cursor.fetchall()
-
-        return [row["classe"] for row in rows]
-
-    # ==========================================================
-    # CONVERSION SQLITE -> OBJET ELEVE
-    # ==========================================================
+        return [self._row_to_classe(row) for row in rows]
 
     @staticmethod
-    def _row_to_eleve(row) -> Eleve:
+    def _row_to_classe(row) -> Classe:
         """
-        Transforme une ligne SQLite en objet Eleve.
-
-        Le projet utilise une connexion SQLite configurée
-        avec sqlite3.Row afin d'accéder aux colonnes par leur nom.
+        Transforme une ligne SQLite en objet Classe.
         """
-
-        return Eleve(
+        return Classe(
             id=row["id"],
             nom=row["nom"],
-            prenom=row["prenom"],
-            classe=row["classe"],
-            annee_scolaire=row["annee_scolaire"],
-            montant_total=row["montant_total"],
-            date_creation=row["date_creation"],
+            niveau=row["niveau"],
+            annee_scolaire=row["annee_scolaire"]
         )
