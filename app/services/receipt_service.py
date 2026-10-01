@@ -176,13 +176,13 @@ class ReceiptService:
             ["Solde restant dû", balance_after],
         ]
         table = self._info_table(solde_rows)
-        after_euros = balance.get("after_euros", 0)
+        after_int = balance.get("after_int", 0)
         table.setStyle(TableStyle([
             ("BACKGROUND", (1, 2), (1, 2), LIGHT),
             ("FONTNAME", (1, 2), (1, 2), "Helvetica-Bold"),
             ("FONTSIZE", (1, 2), (1, 2), 13),
             ("TEXTCOLOR", (1, 2), (1, 2),
-             SUCCESS if after_euros == 0 else DANGER),
+             SUCCESS if after_int == 0 else DANGER),
         ]))
         elements.append(table)
         elements.append(Spacer(1, 1 * cm))

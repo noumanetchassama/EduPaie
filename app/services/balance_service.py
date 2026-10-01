@@ -184,11 +184,11 @@ class BalanceService:
         status = self.get_status(student_id, school_year_id)
 
         return {
-            'total_due_int': total_due,
-            'total_due_formatted': format_euros(total_due),
-            'total_paid_int': total_paid,
-            'total_paid_formatted': format_euros(total_paid),
-            'balance_int': balance,
-            'balance_formatted': format_euros(balance),
-            'status': status
+            "total_due_int": total_due,
+            "total_due_formatted": format_euros(total_due),
+            "total_paid_int": total_paid,
+            "total_paid_formatted": format_euros(total_paid),
+            "balance_int": balance,
+            "balance_formatted": format_euros(balance),
+            "status": status,
         }

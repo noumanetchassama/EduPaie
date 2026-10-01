@@ -81,7 +81,7 @@ class TestStudents:
         student_service, payment_service, _ = services
         s = make_student(student_service, name="Garcia", first="Antoine")
         payment_service.create_payment(
-            student_id=s.id, amount_euros=50.0,
+            student_id=s.id, amount_euros=5000,
             paid_on="2025-06-01", method="especes")
         with pytest.raises(BusinessRuleError):
             student_service.delete_student(s.id)
@@ -112,14 +112,14 @@ class TestBalances:
         year = student_service.get_current_school_year()
 
         payment_service.create_payment(
-            student_id=s.id, amount_euros=100.0,
+            student_id=s.id, amount_euros=10000,
             paid_on="2025-06-01", method="especes")
         info = balance_service.get_balance_info(s.id, year.id)
         assert info["status"] == "Partiellement payé"
 
         total_due = info["total_due_int"]
         payment_service.create_payment(
-            student_id=s.id, amount_euros=total_due / 100 - 100.0,
+            student_id=s.id, amount_euros=total_due - 10000,
             paid_on="2025-06-02", method="cheque")
         info = balance_service.get_balance_info(s.id, year.id)
         assert info["balance_int"] == 0
@@ -136,13 +136,13 @@ class TestPayments:
         s = make_student(student_service, name="Durand", first="Thomas")
         with pytest.raises(BusinessRuleError):
             payment_service.create_payment(
-                student_id=s.id, amount_euros=99999.0,
+                student_id=s.id, amount_euros=9999999,
                 paid_on="2025-06-01", method="especes")
 
     def test_negative_or_zero_amount_refused(self, services):
         student_service, payment_service, _ = services
         s = make_student(student_service, name="Moreau", first="Léa")
-        for bad in (0.0, -10.0):
+        for bad in (0, -10):
             with pytest.raises(ValidationError):
                 payment_service.create_payment(
                     student_id=s.id, amount_euros=bad,
@@ -153,7 +153,7 @@ class TestPayments:
         s = make_student(student_service, name="Simon", first="Hugo")
         with pytest.raises(ValidationError):
             payment_service.create_payment(
-                student_id=s.id, amount_euros=10.0,
+                student_id=s.id, amount_euros=10,
                 paid_on="2099-01-01", method="especes")
 
     def test_invalid_method_refused(self, services):
@@ -161,17 +161,17 @@ class TestPayments:
         s = make_student(student_service, name="Michel", first="Chloé")
         with pytest.raises(ValidationError):
             payment_service.create_payment(
-                student_id=s.id, amount_euros=10.0,
+                student_id=s.id, amount_euros=10,
                 paid_on="2025-06-01", method="crypto")
 
     def test_receipt_numbers_are_sequential_and_unique(self, services):
         student_service, payment_service, _ = services
         s = make_student(student_service, name="Lemoine", first="Jade")
         p1 = payment_service.create_payment(
-            student_id=s.id, amount_euros=10.0,
+            student_id=s.id, amount_euros=10000,
             paid_on="2025-06-01", method="especes")
         p2 = payment_service.create_payment(
-            student_id=s.id, amount_euros=10.0,
+            student_id=s.id, amount_euros=10000,
             paid_on="2025-06-01", method="especes")
         assert p1.receipt_no != p2.receipt_no
         # Numéros séquentiels REC-AAAA-NNNNNN
@@ -184,12 +184,12 @@ class TestPayments:
         s = make_student(student_service, name="Fournier", first="Nathan")
         year = student_service.get_current_school_year()
         p = payment_service.create_payment(
-            student_id=s.id, amount_euros=50.0,
+            student_id=s.id, amount_euros=50000,
             paid_on="2025-06-01", method="virement")
         before = balance_service.get_balance(s.id, year.id)
         payment_service.cancel_payment(p.id, "Erreur de saisie")
         after = balance_service.get_balance(s.id, year.id)
-        assert after == before + 5000  # solde restauré (+50 €)
+        assert after == before + 50000  # solde restauré (+50 000 FCFA)
         with pytest.raises(BusinessRuleError):
             payment_service.cancel_payment(p.id, "Déjà annulé")
 
@@ -211,7 +211,7 @@ class TestReceipts:
         student_service, payment_service, _ = services
         s = make_student(student_service, name="Martinez", first="Sarah")
         p = payment_service.create_payment(
-            student_id=s.id, amount_euros=75.0,
+            student_id=s.id, amount_euros=75000,
             paid_on="2025-06-01", method="cheque")
 
         receipt_service = ReceiptService(payment_service=payment_service)
@@ -227,15 +227,15 @@ class TestReceipts:
         student_service, payment_service, _ = services
         s = make_student(student_service, name="Lopez", first="Enzo")
         p1 = payment_service.create_payment(
-            student_id=s.id, amount_euros=30.0,
+            student_id=s.id, amount_euros=30000,
             paid_on="2025-06-01", method="especes")
         snap1 = payment_service.get_payment_snapshot(p1.id)
 
         payment_service.create_payment(
-            student_id=s.id, amount_euros=30.0,
+            student_id=s.id, amount_euros=30000,
             paid_on="2025-06-02", method="especes")
 
         snap1_again = payment_service.get_payment_snapshot(p1.id)
         assert snap1 == snap1_again
-        assert "Solde restant" in snap1["balance"]["after_formatted"] or \
-            snap1["balance"]["after_euros"] >= 0
+        assert "FCFA" in snap1["balance"]["after_formatted"]
+        assert snap1["balance"]["after_int"] >= 0

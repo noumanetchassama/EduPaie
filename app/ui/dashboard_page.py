@@ -25,6 +25,7 @@ from app.ui.widgets import (
     COLOR_SUCCESS,
     COLOR_TEXT_SECONDARY,
     COLOR_WARNING,
+    FlowLayout,
     PageHeader,
     StatCard,
     StatusBadge,
@@ -69,9 +70,9 @@ class DashboardPage(QWidget):
         header.add_action(self.refresh_btn)
         layout.addWidget(header)
 
-        # ---- Cartes statistiques ----
-        cards = QHBoxLayout()
-        cards.setSpacing(12)
+        # ---- Cartes statistiques (flow responsive : 4→2→1 selon largeur) ----
+        cards_container = QWidget()
+        cards = FlowLayout(cards_container, margin=0, spacing=12)
         self.card_students = StatCard("Élèves inscrits", COLOR_PRIMARY, "👥")
         self.card_collected = StatCard("Total encaissé", COLOR_SUCCESS, "💰")
         self.card_remaining = StatCard("Total restant dû", COLOR_WARNING, "📉")
@@ -79,7 +80,7 @@ class DashboardPage(QWidget):
         for card in (self.card_students, self.card_collected,
                      self.card_remaining, self.card_unsettled):
             cards.addWidget(card)
-        layout.addLayout(cards)
+        layout.addWidget(cards_container)
 
         # ---- Répartition par statut ----
         breakdown = QHBoxLayout()
@@ -110,6 +111,7 @@ class DashboardPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setStretchLastSection(True)
         self.table.doubleClicked.connect(self._open_selected)
         layout.addWidget(self.table, 1)
 

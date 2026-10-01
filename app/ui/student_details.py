@@ -26,6 +26,7 @@ from app.services.receipt_service import ReceiptService
 from app.services.student_service import StudentService
 from app.ui.widgets import (
     COLOR_TEXT_SECONDARY,
+    FlowLayout,
     StatusBadge,
     make_card,
 )
@@ -105,19 +106,20 @@ class StudentDetailsDialog(QDialog):
         self.table.itemSelectionChanged.connect(self._on_selection)
         layout.addWidget(self.table, 1)
 
-        # ---- Actions ----
-        actions = QHBoxLayout()
-        self.receipt_btn = QPushButton("Voir le reçu")
+        # ---- Actions (flow responsive : les boutons passent à la ligne) ----
+        actions_container = QWidget()
+        actions = FlowLayout(actions_container, margin=0, spacing=8)
+        self.receipt_btn = QPushButton("👁 Voir le reçu")
         self.receipt_btn.clicked.connect(self.view_receipt)
         self.receipt_btn.setEnabled(False)
         actions.addWidget(self.receipt_btn)
 
-        self.download_btn = QPushButton("Télécharger le reçu (PDF)")
+        self.download_btn = QPushButton("⬇ Télécharger le reçu (PDF)")
         self.download_btn.clicked.connect(self.download_receipt)
         self.download_btn.setEnabled(False)
         actions.addWidget(self.download_btn)
 
-        self.print_btn = QPushButton("Imprimer le reçu")
+        self.print_btn = QPushButton("🖨 Imprimer le reçu")
         self.print_btn.clicked.connect(self.print_receipt)
         self.print_btn.setEnabled(False)
         actions.addWidget(self.print_btn)
@@ -127,11 +129,10 @@ class StudentDetailsDialog(QDialog):
         self.cancel_btn.setEnabled(False)
         actions.addWidget(self.cancel_btn)
 
-        actions.addStretch()
         self.new_payment_btn = QPushButton("＋ Enregistrer un paiement")
         self.new_payment_btn.clicked.connect(self.add_payment)
         actions.addWidget(self.new_payment_btn)
-        layout.addLayout(actions)
+        layout.addWidget(actions_container)
 
     # ------------------------------------------------------------------
 
@@ -276,6 +277,8 @@ class StudentDetailsDialog(QDialog):
             f"<p><b>Solde restant après paiement :</b> "
             f"{s['balance']['after_formatted']}</p>",
         )
+        # Le reçu vient d'être consulté : proposer directement le PDF
+        self.download_receipt()
 
     def download_receipt(self):
         """Exporte le reçu PDF à l'emplacement choisi par l'utilisateur."""

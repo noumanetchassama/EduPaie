@@ -4,7 +4,7 @@ Configuration de l'application EduPaie
 Contient :
 - resource_path() : accès aux ressources embarquées par PyInstaller (base = racine projet en dev)
 - Chemins utilisateur : DB de travail, logs et reçus PDF
-- Configuration monnaie et école
+- Configuration monnaie (FCFA) et école
 """
 
 import os
@@ -100,11 +100,17 @@ LOG_FILE = get_appdata_path() / "edupaie.log"
 
 
 # ============================================================
-# CONFIGURATION MONNAIE
+# CONFIGURATION MONNAIE — FCFA (XOF)
 # ============================================================
+# Le FCFA n'a pas de sous-unité en circulation : les montants sont
+# stockés en entiers d'unités (pas de centimes, donc pas d'erreurs
+# d'arrondi non plus).
 
-CURRENCY_SYMBOL = "€"
-CURRENCY_SUBUNIT = 100  # 100 cents = 1 euro
+CURRENCY_CODE = "XOF"
+CURRENCY_SYMBOL = "FCFA"
+CURRENCY_SUBUNIT = 1  # pas de centime en pratique
+# Ancienne sous-unité euro ; conservée pour compatibilité, valeur neutre
+CURRENCY_SUBUNIT_EUR = 1
 
 # Nom de l'école (personnalisable)
 SCHOOL_NAME = "Groupe Scolaire Exemple"
@@ -114,20 +120,31 @@ SCHOOL_EMAIL = "contact@ecole-exemple.fr"
 
 
 # ============================================================
-# FONCTIONS DE CONVERSION MONNAIE
+# FONCTIONS DE CONVERSION / FORMATAGE MONNAIE
 # ============================================================
 
 def euros_to_cents(euros: float) -> int:
-    """Convertit un montant en euros vers des centimes (entier, sans erreur d'arrondi)."""
-    return int(round(float(euros) * CURRENCY_SUBUNIT))
+    """
+    Convertit un montant saisi (float) en entier d'unités FCFA.
+
+    L'API historique est conservée (nom et usage) : le « centime » est
+    aujourd'hui l'unité FCFA elle-même (pas de sous-unité).
+    Ex: 25000.0 -> 25000
+    """
+    return int(round(float(euros)))
 
 
 def cents_to_euros(cents: int) -> float:
-    """Convertit un montant en centimes vers des euros (float)."""
-    return cents / CURRENCY_SUBUNIT
+    """
+    Convertit un entier FCFA en float (compatibilité des services/vues).
+    Ex: 25000 -> 25000.0
+    """
+    return float(cents)
 
 
 def format_euros(cents: int) -> str:
-    """Formate un montant en centimes pour l'affichage (ex: 1250 -> '12,50 €')."""
-    euros = cents / CURRENCY_SUBUNIT
-    return f"{euros:,.2f}".replace(",", " ").replace(".", ",") + f" {CURRENCY_SYMBOL}"
+    """
+    Formate un montant en entier pour l'affichage.
+    Ex: 250000 -> '250 000 FCFA'
+    """
+    return f"{int(cents):,}".replace(",", " ") + f" {CURRENCY_SYMBOL}"

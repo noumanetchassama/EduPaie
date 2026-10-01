@@ -29,6 +29,7 @@ from app.ui.student_details import StudentDetailsDialog
 from app.ui.student_form import StudentForm
 from app.ui.widgets import (
     COLOR_TEXT_SECONDARY,
+    FlowLayout,
     PageHeader,
     StatusBadge,
     make_card,
@@ -75,30 +76,34 @@ class StudentsPage(QWidget):
         header.add_action(self.add_btn)
         layout.addWidget(header)
 
-        # ---- Barre de recherche / filtres ----
-        filters = QHBoxLayout()
-        filters.setSpacing(10)
+        # ---- Barre de recherche / filtres (flow responsive) ----
+        filters_container = QWidget()
+        filters = FlowLayout(filters_container, margin=10, spacing=10)
 
         self.search_edit = QLineEdit()
         self.search_edit.setPlaceholderText(
             "🔍  Rechercher un élève (nom, prénom, matricule)…")
         self.search_edit.textChanged.connect(self._apply_filters)
-        self.search_edit.setMinimumWidth(280)
-        filters.addWidget(self.search_edit, 2)
+        self.search_edit.setMinimumWidth(220)
+        self.search_edit.setMaximumWidth(420)
+        filters.addWidget(self.search_edit)
 
         self.class_combo = QComboBox()
+        self.class_combo.setMinimumContentsLength(12)
+        self.class_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         self.class_combo.currentIndexChanged.connect(self._apply_filters)
-        filters.addWidget(QLabel("Classe :"), 0)
-        filters.addWidget(self.class_combo, 1)
+        filters.addWidget(QLabel("Classe :"))
+        filters.addWidget(self.class_combo)
 
         self.status_combo = QComboBox()
         for label in STATUS_FILTERS:
             self.status_combo.addItem(label)
         self.status_combo.currentIndexChanged.connect(self._apply_filters)
-        filters.addWidget(QLabel("Statut :"), 0)
-        filters.addWidget(self.status_combo, 1)
+        filters.addWidget(QLabel("Statut :"))
+        filters.addWidget(self.status_combo)
 
-        layout.addWidget(make_card(filters))
+        layout.addWidget(make_card(filters_container.layout()))
 
         # ---- Tableau ----
         self.table = QTableWidget(0, 8)
@@ -112,12 +117,13 @@ class StudentsPage(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(
             QHeaderView.ResizeMode.Interactive)
         self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setStretchLastSection(True)
         self.table.doubleClicked.connect(lambda _: self.view_details())
         layout.addWidget(self.table, 1)
 
-        # ---- Barre d'actions ----
-        actions = QHBoxLayout()
-        actions.setSpacing(8)
+        # ---- Barre d'actions (flow responsive : se replie en colonnes) ----
+        actions_container = QWidget()
+        actions = FlowLayout(actions_container, margin=0, spacing=8)
 
         self.pay_btn = QPushButton("Enregistrer un paiement")
         self.pay_btn.clicked.connect(self.record_payment)
@@ -139,16 +145,15 @@ class StudentsPage(QWidget):
         self.delete_btn.setEnabled(False)
         actions.addWidget(self.delete_btn)
 
-        actions.addStretch()
         self.count_label = QLabel("")
         self.count_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY};")
         actions.addWidget(self.count_label)
 
-        self.refresh_btn = QPushButton("Actualiser")
+        self.refresh_btn = QPushButton("⟳ Actualiser")
         self.refresh_btn.clicked.connect(self.refresh)
         actions.addWidget(self.refresh_btn)
 
-        layout.addLayout(actions)
+        layout.addWidget(actions_container)
 
         self.table.itemSelectionChanged.connect(self._on_selection)
 

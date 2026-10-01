@@ -36,7 +36,7 @@ Les couches communiquent par modèles (`app/models`) : `Student`, `Payment`, `Cl
 | `receipt_snapshot` | Reçu figé (JSON) | 1:1 avec payment, source du PDF |
 | `receipt_counter` | Compteur par année | numérotation `REC-AAAA-NNNNNN` |
 
-**Argent = entiers (centimes)** partout. Conversion uniquement à l'affichage (`app.config.format_euros`).
+**Argent = entiers (FCFA, pas de sous-unité)** partout — pas d'erreurs d'arrondi. Formatage à l'affichage : `app.config.format_euros` (ex. `586 000 FCFA`). Les bases créées en « centimes d'euro » avant la v2 sont converties automatiquement au démarrage (×100, flag `fcfa_v2` en table `meta`).
 
 Le schéma (`app/data/schema.sql`) est **idempotent** et insère les données de base (année courante, classes et plans de frais par défaut, compteurs). `Database.initialize_schema()` l'exécute à **chaque démarrage** et applique une **migration légère** (colonnes manquantes sur bases anciennes).
 

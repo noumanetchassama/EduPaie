@@ -12,7 +12,7 @@ Fonctionnalités :
 from datetime import date, datetime
 from typing import List, Optional
 
-from app.config import CURRENCY_SYMBOL, cents_to_euros, format_euros
+from app.config import format_euros
 from app.data.repositories.class_repository import ClassRepository
 from app.data.repositories.fee_plan_repository import FeePlanRepository
 from app.data.repositories.payment_repository import PaymentRepository
@@ -110,7 +110,7 @@ class PaymentService:
         if amount_euros <= 0:
             raise ValidationError("Le montant doit être strictement positif")
 
-        amount_int = int(round(amount_euros * 100))
+        amount_int = int(round(amount_euros))  # FCFA entiers
 
         if method not in self.MODES_PAIEMENT:
             raise ValidationError(f"Mode de paiement invalide : {method}")
@@ -240,16 +240,16 @@ class PaymentService:
                 "school_year": school_year.label,
             },
             "payment": {
-                "amount_euros": cents_to_euros(amount_int),
+                "amount_int": amount_int,
                 "amount_formatted": format_euros(amount_int),
                 "paid_on": paid_on,
                 "method": self.MODES_PAIEMENT_LABELS.get(method, method),
                 "reference": reference,
             },
             "balance": {
-                "before_euros": cents_to_euros(balance_before),
+                "before_int": balance_before,
                 "before_formatted": format_euros(balance_before),
-                "after_euros": cents_to_euros(balance_after),
+                "after_int": balance_after,
                 "after_formatted": format_euros(balance_after),
             },
         }

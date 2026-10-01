@@ -68,8 +68,8 @@ class PaymentDialog(QDialog):
         form.setSpacing(10)
 
         self.amount_edit = QLineEdit()
-        self.amount_edit.setPlaceholderText("Ex : 250,00")
-        form.addRow("Montant payé *", self.amount_edit)
+        self.amount_edit.setPlaceholderText("Ex : 25 000")
+        form.addRow("Montant payé (FCFA) *", self.amount_edit)
 
         self.date_edit = QDateEdit()
         self.date_edit.setCalendarPopup(True)
@@ -132,7 +132,7 @@ class PaymentDialog(QDialog):
 
     def _on_amount_changed(self, text: str):
         """Met à jour l'aperçu du solde après paiement et l'avertissement."""
-        text = text.replace(",", ".").replace(" ", "")
+        text = text.replace(" ", "").replace("\u202f", "").replace(",", ".")
         try:
             amount = float(text) if text else 0.0
         except ValueError:
@@ -143,13 +143,13 @@ class PaymentDialog(QDialog):
             self.save_btn.setEnabled(True)
             return
 
-        cents = int(round(amount * 100))
-        if cents <= 0:
+        amount_int = int(round(amount))  # FCFA entiers
+        if amount_int <= 0:
             self.warning_label.hide()
             self.save_btn.setEnabled(True)
             return
 
-        remaining = self._balance - cents
+        remaining = self._balance - amount_int
         if remaining < 0:
             self.warning_label.setText(
                 "⚠ Le montant saisi dépasse le solde restant : le solde ne peut "
@@ -170,14 +170,12 @@ class PaymentDialog(QDialog):
             self.warning_label.show()
 
     def _save(self):
-        from PySide6.QtWidgets import QApplication  # import local, léger
-
-        text = self.amount_edit.text().replace(",", ".").replace(" ", "")
+        text = self.amount_edit.text().replace(" ", "").replace("\u202f", "").replace(",", ".")
         try:
             amount = float(text)
         except ValueError:
             QMessageBox.warning(self, "Montant invalide",
-                                "Saisissez un montant numérique (ex : 250,00).")
+                                "Saisissez un montant en FCFA (ex : 25 000).")
             self.amount_edit.setFocus()
             return
 

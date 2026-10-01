@@ -1,6 +1,6 @@
 # EduPaie — Gestion des paiements scolaires
 
-Application desktop de gestion des paiements de scolarité, développée en **Python / PySide6** avec **SQLite** et génération de **reçus PDF** (reportlab).
+Application desktop de gestion des paiements de scolarité (monnaie : **FCFA**), développée en **Python / PySide6** avec **SQLite** et génération de **reçus PDF** (reportlab).
 
 ![Statuts](https://img.shields.io/badge/statuts-Sold%C3%A9%20%2F%20Partiel%20%2F%20Non%20pay%C3%A9-2c5282)
 
@@ -13,6 +13,8 @@ Application desktop de gestion des paiements de scolarité, développée en **Py
 - **Reçus** : numéro unique `REC-AAAA-NNNNNN` généré **atomiquement**, snapshot figé en base → **téléchargement PDF** et **réimpression strictement identique**, aperçu avant impression, impression directe via la visionneuse système.
 - **Annulation de paiement** (motif obligatoire) : historique conservé, soldes recalculés.
 - **Tableau de bord** : nombre d'élèves, total encaissé, total restant dû, élèves non soldés, répartition par statut et liste filtrable.
+- **Classes** : de la 6ème à la Terminale, séries A et D (14 classes par défaut, montants FCFA par classe).
+- **Interface responsive** : barre latérale repliable (auto sous 950 px), barres de filtres et d'actions qui se réorganisent en plusieurs lignes selon la largeur de la fenêtre.
 - **Robustesse** : argent stocké en **entiers (centimes)** — pas d'erreurs d'arrondi ; transactions SQLite explicites ; schéma auto-migré au démarrage.
 
 ## Démarrage rapide

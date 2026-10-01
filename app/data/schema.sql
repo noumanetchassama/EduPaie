@@ -43,17 +43,35 @@ CREATE TABLE IF NOT EXISTS class (
 
 CREATE INDEX IF NOT EXISTS idx_class_name ON class(name COLLATE NOCASE);
 
--- Classes par défaut (rattachées à l'année courante)
+-- Classes par défaut : du 6ème au Tle, séries A et D (rattachées à l'année courante)
 INSERT OR IGNORE INTO class (name, level, school_year_id)
 SELECT '6ème A', '6ème', id FROM school_year WHERE is_current = 1;
 INSERT OR IGNORE INTO class (name, level, school_year_id)
-SELECT '6ème B', '6ème', id FROM school_year WHERE is_current = 1;
+SELECT '6ème D', '6ème', id FROM school_year WHERE is_current = 1;
 INSERT OR IGNORE INTO class (name, level, school_year_id)
 SELECT '5ème A', '5ème', id FROM school_year WHERE is_current = 1;
 INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '5ème D', '5ème', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
 SELECT '4ème A', '4ème', id FROM school_year WHERE is_current = 1;
 INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '4ème D', '4ème', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
 SELECT '3ème A', '3ème', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '3ème D', '3ème', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '2nde A', '2nde', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '2nde D', '2nde', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '1ère A', '1ère', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT '1ère D', '1ère', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT 'Tle A', 'Tle', id FROM school_year WHERE is_current = 1;
+INSERT OR IGNORE INTO class (name, level, school_year_id)
+SELECT 'Tle D', 'Tle', id FROM school_year WHERE is_current = 1;
 
 -- ============================================================
 -- TABLE DES ÉLÈVES
@@ -95,23 +113,29 @@ CREATE TABLE IF NOT EXISTS fee_plan (
 
 CREATE INDEX IF NOT EXISTS idx_fee_plan_class ON fee_plan(class_id, school_year_id);
 
--- Plans de frais par défaut : 6ème 500 €, 5ème 550 €, 4ème 600 €, 3ème 650 €
+-- Plans de frais par défaut (FCFA par an) : 6ème 50 000, 5ème 55 000,
+-- 4ème 60 000, 3ème 65 000, 2nde 75 000, 1ère 85 000, Tle 95 000
 INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
 SELECT c.id, c.school_year_id, 'Scolarité', 50000, '2025-06-30'
-FROM class c JOIN school_year sy ON sy.id = c.school_year_id
-WHERE c.level = '6ème';
+FROM class c WHERE c.level = '6ème';
 INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
 SELECT c.id, c.school_year_id, 'Scolarité', 55000, '2025-06-30'
-FROM class c JOIN school_year sy ON sy.id = c.school_year_id
-WHERE c.level = '5ème';
+FROM class c WHERE c.level = '5ème';
 INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
 SELECT c.id, c.school_year_id, 'Scolarité', 60000, '2025-06-30'
-FROM class c JOIN school_year sy ON sy.id = c.school_year_id
-WHERE c.level = '4ème';
+FROM class c WHERE c.level = '4ème';
 INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
 SELECT c.id, c.school_year_id, 'Scolarité', 65000, '2025-06-30'
-FROM class c JOIN school_year sy ON sy.id = c.school_year_id
-WHERE c.level = '3ème';
+FROM class c WHERE c.level = '3ème';
+INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
+SELECT c.id, c.school_year_id, 'Scolarité', 75000, '2025-06-30'
+FROM class c WHERE c.level = '2nde';
+INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
+SELECT c.id, c.school_year_id, 'Scolarité', 85000, '2025-06-30'
+FROM class c WHERE c.level = '1ère';
+INSERT OR IGNORE INTO fee_plan (class_id, school_year_id, label, amount_int, due_date)
+SELECT c.id, c.school_year_id, 'Scolarité', 95000, '2025-06-30'
+FROM class c WHERE c.level = 'Tle';
 
 -- ============================================================
 -- TABLE DES PAIEMENTS

@@ -40,7 +40,7 @@ Les filtres se combinent (ex. « 6ème A » + « Non payés »).
 
 1. Sélectionnez un élève → **Enregistrer un paiement**.
 2. Le dialogue affiche le **solde restant dû** de l'élève.
-3. Saisissez le **montant** : un message indique en temps réel le solde après paiement.
+3. Saisissez le **montant en FCFA** (ex. `25 000`) : un message indique en temps réel le solde après paiement.
    - ⚠ **Si le montant dépasse le solde, l'enregistrement est refusé** : un paiement ne peut jamais rendre le solde négatif.
 4. Choisissez la **date** (pas de date future) et le **mode de paiement** : Espèces, Chèque, Virement, Mobile Money. Une **référence** (n° de chèque…) est optionnelle.
 5. Validez : un **numéro de reçu unique** (ex. `REC-2024-000023`) est attribué automatiquement.

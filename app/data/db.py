@@ -8,6 +8,7 @@ Fonctionnalités :
 - Migration légère : ajoute les colonnes manquantes si une base existante est détectée
 """
 
+import logging
 import sqlite3
 from pathlib import Path
 from contextlib import contextmanager
@@ -109,6 +110,11 @@ class Database:
         conn = self.get_connection()
         cursor = conn.cursor()
 
+        # Détection AVANT l'exécution du schéma : une base « legacy » en
+        # euros (montants stockés en centimes) doit être convertie en FCFA.
+        # Une base neuve n'a pas encore de table fee_plan → pas de migration.
+        legacy_euro = self._detect_legacy_euro(cursor)
+
         with open(schema_file, "r", encoding="utf-8") as f:
             schema_sql = f.read()
 
@@ -116,9 +122,50 @@ class Database:
         cursor.executescript(schema_sql)
         conn.commit()
 
-        # Migration légère pour les bases créées avec un ancien schéma
+        # Migrations
         self._migrate_if_needed(cursor)
+        if legacy_euro:
+            cursor.execute(
+                "UPDATE fee_plan SET amount_int = amount_int * 100")
+            cursor.execute(
+                "UPDATE payment SET amount_int = amount_int * 100")
+            logging.warning(
+                "Base ancienne en euros convertie en FCFA (montants x 100)")
+        # Garde-fou anti double-migration
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT)")
+        cursor.execute(
+            "INSERT OR REPLACE INTO meta (key, value) VALUES ('fcfa_v2', '1')")
         conn.commit()
+
+    @staticmethod
+    def _detect_legacy_euro(cursor) -> bool:
+        """
+        True si la base existante contient des montants en centimes d'euro
+        (500 €-650 € typiques → 50000-65000 en base, divisibles par 100).
+        Ne s'applique qu'aux bases créées avant l'adoption du FCFA.
+        """
+        tables = {r[0] for r in cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'")}
+        if "fee_plan" not in tables or "payment" not in tables:
+            return False
+        if "meta" in tables:
+            cursor.execute("SELECT value FROM meta WHERE key = 'fcfa_v2'")
+            if cursor.fetchone() is not None:
+                return False  # déjà traité
+        cursor.execute(
+            "SELECT MIN(amount_int), MAX(amount_int) FROM fee_plan")
+        mn, mx = cursor.fetchone()
+        if mn is None or mx is None:
+            return False
+        if not (10000 <= mn and mx <= 100000):
+            return False
+        # Tous les montants doivent être des centimes ronds (multiple de 100)
+        cursor.execute(
+            "SELECT COUNT(*) FROM fee_plan WHERE amount_int % 100 != 0")
+        if cursor.fetchone()[0] > 0:
+            return False
+        return True
 
     @staticmethod
     def _migrate_if_needed(cursor):
@@ -150,6 +197,8 @@ class Database:
             if "is_active" not in cols:
                 cursor.execute(
                     "ALTER TABLE student ADD COLUMN is_active BOOLEAN DEFAULT 1")
+
+
 
     def get_version(self) -> int:
         """Retourne la version du schéma (PRAGMA user_version)."""
