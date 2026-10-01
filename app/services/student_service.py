@@ -11,6 +11,7 @@ import re
 from datetime import datetime
 from typing import List, Optional
 
+from app.data.repositories.audit_repository import AuditRepository
 from app.data.repositories.class_repository import ClassRepository
 from app.data.repositories.payment_repository import PaymentRepository
 from app.data.repositories.school_year_repository import SchoolYearRepository
@@ -28,11 +29,13 @@ class StudentService:
         class_repo: Optional[ClassRepository] = None,
         payment_repo: Optional[PaymentRepository] = None,
         school_year_repo: Optional[SchoolYearRepository] = None,
+        audit_repo: Optional[AuditRepository] = None,
     ):
         self.student_repo = student_repo or StudentRepository()
         self.class_repo = class_repo or ClassRepository()
         self.payment_repo = payment_repo or PaymentRepository()
         self.school_year_repo = school_year_repo or SchoolYearRepository()
+        self.audit_repo = audit_repo or AuditRepository()
 
     # ------------------------------------------------------------------
     # Helpers
@@ -182,6 +185,11 @@ class StudentService:
 
         student_id = self.student_repo.add(student)
         student.id = student_id
+
+        self.audit_repo.add(
+            "Création", "Élève", student.id,
+            f"{student.first_name} {student.last_name} ({student.matricule})",
+            f"Classe : {class_obj.name}")
         return student
 
     def update_student(self, student: Student) -> Student:
@@ -195,6 +203,8 @@ class StudentService:
         """
         if student.id is None:
             raise ValidationError("Impossible de modifier un étudiant sans identifiant")
+
+        previous = self.student_repo.get_by_id(student.id)
 
         if not student.last_name or not student.last_name.strip():
             raise ValidationError("Le nom est obligatoire")
@@ -234,7 +244,90 @@ class StudentService:
         success = self.student_repo.update(student)
         if not success:
             raise NotFoundError(f"Étudiant introuvable (ID: {student.id})")
+
+        self._audit_update(student, previous)
         return student
+
+    def _audit_update(self, student: Student, previous: Optional[Student]):
+        """Journalise les champs réellement modifiés d'un élève."""
+        if previous is None:
+            changes = []
+        else:
+            mapping = [
+                ((previous.last_name or ""), (student.last_name or ""), "nom"),
+                ((previous.first_name or ""), (student.first_name or ""), "prénom"),
+                ((previous.matricule or ""), (student.matricule or ""), "matricule"),
+                ((previous.birth_date or ""), (student.birth_date or ""), "date de naissance"),
+                (previous.class_id, student.class_id, "classe"),
+                ((previous.parent_name or ""), (student.parent_name or ""), "parent"),
+                ((previous.parent_phone or ""), (student.parent_phone or ""), "téléphone parent"),
+                ((previous.parent_email or ""), (student.parent_email or ""), "email parent"),
+                (previous.is_active, student.is_active, "statut d'activité"),
+            ]
+            changes = [label for old, new, label in mapping if old != new]
+        details = ("Champs modifiés : " + ", ".join(changes)) if changes \
+            else "Enregistrement sans changement"
+        self.audit_repo.add(
+            "Modification", "Élève", student.id,
+            f"{student.first_name} {student.last_name} ({student.matricule})",
+            details)
+
+    def move_student(self, student_id: int, new_class_id: int) -> Student:
+        """
+        Déplace un élève vers une autre classe (transfert).
+
+        Les paiements déjà enregistrés sont conservés ; le total dû est
+        recalculé à partir des frais de la nouvelle classe.
+
+        Raises:
+            NotFoundError: Élève ou classe inexistante
+            BusinessRuleError: L'élève est déjà dans cette classe
+        """
+        student = self.student_repo.get_by_id(student_id)
+        if not student:
+            raise NotFoundError(f"Étudiant introuvable (ID: {student_id})")
+
+        new_class = self.class_repo.get_by_id(new_class_id)
+        if not new_class:
+            raise NotFoundError(f"Classe introuvable (ID: {new_class_id})")
+        if new_class.id == student.class_id:
+            raise BusinessRuleError(
+                f"L'élève est déjà inscrit en « {new_class.name} ».")
+
+        old_class = self.class_repo.get_by_id(student.class_id)
+        old_name = old_class.name if old_class else "?"
+
+        student.class_id = new_class.id
+        success = self.student_repo.update(student)
+        if not success:
+            raise NotFoundError(f"Étudiant introuvable (ID: {student_id})")
+
+        self.audit_repo.add(
+            "Modification", "Élève", student.id,
+            f"{student.first_name} {student.last_name} ({student.matricule})",
+            f"Transfert de classe : « {old_name} » → « {new_class.name} »")
+        return student
+
+    def get_class_for_year(self, student: Student, school_year_id: int):
+        """
+        Retourne la classe de l'élève pour l'année scolaire donnée.
+
+        Les élèves étant rattachés à la classe de leur inscription, la
+        consultation d'une année antérieure apparie la classe par son NOM
+        (les classes sont recréées à l'identique chaque année).
+        Retourne None si aucune classe équivalente n'existe cette année-là.
+        """
+        if not student or not student.class_id:
+            return None
+        current = self.class_repo.get_by_id(student.class_id)
+        if not current:
+            return None
+        if current.school_year_id == school_year_id:
+            return current
+        for c in self.class_repo.get_all(school_year_id):
+            if c.name == current.name:
+                return c
+        return None
 
     def delete_student(self, student_id: int) -> bool:
         """
@@ -257,7 +350,15 @@ class StudentService:
                 "Impossible de supprimer un élève ayant des paiements enregistrés "
                 "(l'historique des reçus doit être conservé).")
 
-        return self.student_repo.delete(student_id)
+        deleted = self.student_repo.delete(student_id)
+        if deleted:
+            class_obj = self.class_repo.get_by_id(student.class_id)
+            self.audit_repo.add(
+                "Suppression", "Élève", student_id,
+                f"{student.first_name} {student.last_name} ({student.matricule})",
+                f"Classe au moment de la suppression : "
+                f"{class_obj.name if class_obj else '?'}")
+        return deleted
 
     def get_student(self, student_id: int) -> Optional[Student]:
         """Récupère un étudiant par son identifiant."""

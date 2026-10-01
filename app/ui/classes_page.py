@@ -202,10 +202,10 @@ class ClassesPage(QWidget):
 
     # ------------------------------------------------------------------
 
-    def refresh(self):
-        """Recharge la liste des classes."""
+    def refresh(self, school_year_id=None):
+        """Recharge la liste des classes de l'année scolaire consultée."""
         try:
-            self._rows = self.class_service.get_all_classes()
+            self._rows = self.class_service.get_all_classes(school_year_id)
         except EduPaieException:
             self._rows = []
 

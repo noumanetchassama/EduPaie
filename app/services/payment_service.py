@@ -13,6 +13,7 @@ from datetime import date, datetime
 from typing import List, Optional
 
 from app.config import format_euros
+from app.data.repositories.audit_repository import AuditRepository
 from app.data.repositories.class_repository import ClassRepository
 from app.data.repositories.fee_plan_repository import FeePlanRepository
 from app.data.repositories.payment_repository import PaymentRepository
@@ -44,12 +45,14 @@ class PaymentService:
         school_year_repo: Optional[SchoolYearRepository] = None,
         fee_plan_repo: Optional[FeePlanRepository] = None,
         class_repo: Optional[ClassRepository] = None,
+        audit_repo: Optional[AuditRepository] = None,
     ):
         self.payment_repo = payment_repo or PaymentRepository()
         self.student_repo = student_repo or StudentRepository()
         self.school_year_repo = school_year_repo or SchoolYearRepository()
         self.fee_plan_repo = fee_plan_repo or FeePlanRepository()
         self.class_repo = class_repo or ClassRepository()
+        self.audit_repo = audit_repo or AuditRepository()
         self.student_service = StudentService(
             student_repo=self.student_repo,
             class_repo=self.class_repo,
@@ -135,6 +138,11 @@ class PaymentService:
         payment_id, receipt_no = self._insert_payment_atomic(
             student, school_year, amount_int, paid_on, method, reference
         )
+
+        self.audit_repo.add(
+            "Création", "Paiement", payment_id, receipt_no,
+            f"{format_euros(amount_int)} — {student.first_name} {student.last_name} "
+            f"({self.MODES_PAIEMENT_LABELS.get(method, method)})")
 
         payment = Payment(
             id=payment_id,
@@ -324,6 +332,12 @@ class PaymentService:
                 f"restant ({format_euros(balance_others)}) après modification.")
 
         # Mise à jour + snapshot régénéré (numéro de reçu inchangé)
+        previous = {
+            "amount_int": payment.amount_int,
+            "paid_on": payment.paid_on,
+            "method": payment.method,
+            "reference": payment.reference,
+        }
         payment.amount_int = amount_int
         payment.paid_on = paid_on
         payment.method = method
@@ -336,6 +350,22 @@ class PaymentService:
             student, year, amount_int, paid_on, method, reference,
             payment.receipt_no)
         self.payment_repo.update(payment, snapshot=snapshot)
+
+        changes = []
+        if previous["amount_int"] != amount_int:
+            changes.append(f"Montant : {format_euros(previous['amount_int'])} → "
+                           f"{format_euros(amount_int)}")
+        if previous["paid_on"] != paid_on:
+            changes.append(f"Date : {previous['paid_on']} → {paid_on}")
+        if previous["method"] != method:
+            changes.append(
+                f"Mode : {self.MODES_PAIEMENT_LABELS.get(previous['method'], previous['method'])} "
+                f"→ {self.MODES_PAIEMENT_LABELS.get(method, method)}")
+        if previous["reference"] != reference:
+            changes.append("Référence")
+        self.audit_repo.add(
+            "Modification", "Paiement", payment.id, payment.receipt_no,
+            " ; ".join(changes) or "Enregistrement sans changement")
         return payment
 
     def delete_payment(self, payment_id: int) -> bool:
@@ -352,7 +382,12 @@ class PaymentService:
         payment = self.payment_repo.get_by_id(payment_id)
         if not payment:
             raise NotFoundError(f"Paiement introuvable (ID: {payment_id})")
-        return self.payment_repo.delete(payment_id)
+        deleted = self.payment_repo.delete(payment_id)
+        if deleted:
+            self.audit_repo.add(
+                "Suppression", "Paiement", payment_id, payment.receipt_no,
+                f"{format_euros(payment.amount_int)} du {payment.paid_on}")
+        return deleted
 
     def cancel_payment(self, payment_id: int, reason: str) -> bool:
         """
@@ -375,7 +410,12 @@ class PaymentService:
         if payment.is_cancelled:
             raise BusinessRuleError("Ce paiement est déjà annulé")
 
-        return self.payment_repo.cancel(payment_id, reason.strip())
+        cancelled = self.payment_repo.cancel(payment_id, reason.strip())
+        if cancelled:
+            self.audit_repo.add(
+                "Annulation", "Paiement", payment_id, payment.receipt_no,
+                f"Motif : {reason.strip()}")
+        return cancelled
 
     def get_payment_by_receipt(self, receipt_no: str) -> Optional[Payment]:
         """Récupère un paiement par son numéro de reçu."""
@@ -408,11 +448,16 @@ class PaymentService:
     # Statistiques globales (tableau de bord)
     # ------------------------------------------------------------------
 
-    def get_overview(self) -> dict:
+    def get_overview(self, school_year_id: Optional[int] = None) -> dict:
         """
         Calcule les statistiques globales pour le tableau de bord :
         nombre d'élèves, total encaissé, total restant dû, nombre d'élèves
         non soldés, et le détail par élève (dû / payé / solde / statut).
+
+        Args:
+            school_year_id: Année scolaire à consulter (défaut : année
+                courante). Pour une année antérieure, la classe de l'élève
+                est retrouvée par son nom dans cette année.
 
         Returns:
             dict avec clés :
@@ -420,9 +465,13 @@ class PaymentService:
                 total_balance_int, nb_paid, nb_partial, nb_unpaid,
                 nb_not_settled, students (liste de dicts)
         """
-        school_year = self.student_service.get_current_school_year()
+        school_year = self._resolve_school_year(school_year_id)
         students = self.student_repo.get_all(active_only=False)
-        classes = {c.id: c.name for c in self.class_repo.get_all(school_year.id)}
+        year_classes = self.class_repo.get_all(school_year.id)
+        classes = {c.id: c.name for c in year_classes}
+        class_id_by_name = {c.name: c.id for c in year_classes}
+        # Nom de la classe actuelle de chaque élève (toutes années)
+        all_classes = {c.id: c.name for c in self.class_repo.get_all()}
 
         total_due = 0
         total_paid = 0
@@ -432,12 +481,23 @@ class PaymentService:
         student_rows = []
 
         for s in students:
-            total_due_s = self.fee_plan_repo.get_total_by_class(s.class_id, school_year.id)
+            # Classe de l'élève pour l'année consultée (par nom) ; un élève
+            # sans classe connue cette année-là et sans paiement n'est pas
+            # affiché (il n'était pas suivi cette année-là).
+            class_id_year = class_id_by_name.get(all_classes.get(s.class_id, ""))
             total_paid_s = self.payment_repo.get_total_by_student(s.id, school_year.id)
+            if class_id_year is None and total_paid_s == 0:
+                continue
+
+            total_due_s = self.fee_plan_repo.get_total_by_class(
+                class_id_year, school_year.id) if class_id_year else 0
             balance = total_due_s - total_paid_s
 
             if total_due_s == 0:
-                status = BalanceService.STATUS_UNPAID
+                # Aucun plan de frais cette année-là : soldé si des paiements
+                # existent, sinon non payé (aligné sur BalanceService.get_status)
+                status = (BalanceService.STATUS_SOLD if total_paid_s > 0
+                          else BalanceService.STATUS_UNPAID)
             elif balance == 0:
                 status = BalanceService.STATUS_SOLD
             elif total_paid_s > 0:
@@ -456,7 +516,7 @@ class PaymentService:
 
             student_rows.append({
                 "student": s,
-                "class_name": classes.get(s.class_id, "—"),
+                "class_name": all_classes.get(s.class_id, "—"),
                 "school_year": school_year.label,
                 "total_due_int": total_due_s,
                 "total_paid_int": total_paid_s,
@@ -466,7 +526,7 @@ class PaymentService:
 
         return {
             "school_year": school_year,
-            "nb_students": len(students),
+            "nb_students": len(student_rows),
             "total_due_int": total_due,
             "total_paid_int": total_paid,
             "total_balance_int": total_due - total_paid,
@@ -476,3 +536,11 @@ class PaymentService:
             "nb_not_settled": nb_partial + nb_unpaid,
             "students": student_rows,
         }
+
+    def _resolve_school_year(self, school_year_id: Optional[int] = None):
+        """Année demandée, ou l'année courante par défaut."""
+        if school_year_id:
+            year = self.school_year_repo.get_by_id(school_year_id)
+            if year is not None:
+                return year
+        return self.student_service.get_current_school_year()

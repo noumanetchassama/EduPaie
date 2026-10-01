@@ -179,6 +179,23 @@ CREATE TABLE IF NOT EXISTS receipt_counter (
     last_number INTEGER NOT NULL DEFAULT 0   -- Dernier numéro utilisé
 );
 
+-- ============================================================
+-- TABLE JOURNAL D'AUDIT (traçabilité des opérations)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,                    -- Création / Modification / Suppression / Annulation
+    entity TEXT NOT NULL,                    -- Élève / Paiement / Classe / Année scolaire
+    entity_id INTEGER,                       -- Identifiant de l'élément
+    entity_label TEXT,                       -- Libellé lisible (nom, n° de reçu…)
+    details TEXT,                            -- Détails (motif, anciennes/nouvelles valeurs…)
+    user TEXT,                               -- Utilisateur système ayant opéré
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity, entity_id);
+
 -- Compteurs de reçus pré-initialisés (année scolaire en cours + suivante)
 INSERT OR IGNORE INTO receipt_counter (year, last_number) VALUES (2024, 0);
 INSERT OR IGNORE INTO receipt_counter (year, last_number) VALUES (2025, 0);

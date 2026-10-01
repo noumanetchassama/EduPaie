@@ -9,8 +9,9 @@ Lancez `python main.py` (ou `EduPaie.exe`). L'application s'ouvre sur le **Table
 - **Tableau de bord** — vue d'ensemble
 - **Élèves** — gestion des inscriptions et des paiements
 - **Classes** — niveaux, séries et frais de scolarité
+- **Journal d'audit** — traçabilité des opérations
 
-L'année scolaire en cours est affichée en bas de la barre latérale.
+En bas de la barre latérale, la liste déroulante **« Année scolaire consultée »** permet de consulter les données d'une autre année (voir section 6) ; le bouton **+** à côté crée une nouvelle année scolaire.
 
 ---
 
@@ -63,10 +64,20 @@ Pour chaque paiement sélectionné :
 | **Télécharger le reçu (PDF)** | Enregistre le PDF à l'emplacement choisi |
 | **Imprimer le reçu** | Ouvre le PDF dans la visionneuse → impression |
 | **Annuler ce paiement…** | Motif obligatoire ; le reçu reste dans l'historique, le solde est recalculé |
+| **Déplacer vers une autre classe…** | Transfère l'élève (voir ci-dessous) |
 
 > Les reçus sont **réimprimables à l'identique** : le contenu est figé en base au moment de l'émission, même si l'élève change de classe ou si les tarifs évoluent.
 
 Par défaut, les reçus sont aussi enregistrés dans `~/Documents/EduPaie/Recus/`.
+
+### Déplacer un élève vers une autre classe
+
+Dans la fiche élève, cliquez sur **« Déplacer vers une autre classe… »**, choisissez la nouvelle classe puis validez :
+
+- l'élève change de classe immédiatement ;
+- son **total dû est recalculé** automatiquement (frais de la nouvelle classe) ;
+- ses paiements déjà enregistrés sont **conservés** ;
+- le transfert est **tracé dans le journal d'audit** (« Transfert de classe : « 6ème A » → « 5ème A » »).
 
 ### Corriger ou supprimer un paiement
 
@@ -92,15 +103,38 @@ La page **Classes** liste toutes les classes avec leur niveau, leurs **frais ann
 
 ---
 
-## 5. Tableau de bord
+## 5. Journal d'audit (onglet dédié)
 
-- **Cartes** : élèves inscrits, total encaissé, total restant dû, élèves non soldés.
-- **Répartition** : pourcentages Soldés / Partiels / Non payés.
-- **Liste des élèves** : triable et **filtrable par statut** ; **double-clic** = ouvrir la fiche.
+L'onglet **Journal d'audit** liste toutes les opérations tracées : **qui** (utilisateur système) a **fait quoi** (création, modification, suppression, annulation) et **sur quoi** (élève, paiement, classe, année scolaire), avec le détail (motif d'annulation, champs modifiés, transfert de classe…).
+
+- **Filtres** : par élément (élèves / paiements / classes / années) et par action.
+- Chaque ligne indique la date et l'heure, l'action (en couleur), le libellé de l'élément (nom, n° de reçu…) et le compte utilisateur.
+- Le journal est **automatique** : aucune action supplémentaire n'est nécessaire lors de la saisie.
 
 ---
 
-## 6. Questions fréquentes
+## 6. Consulter une année scolaire précédente
+
+En bas de la barre latérale, la liste déroulante **« Année scolaire consultée »** affiche toutes les années connues (l'année courante est marquée « — courante ») :
+
+1. Choisissez une année : le **tableau de bord**, la liste des **élèves** (soldes et statuts de cette année) et les **classes** s'actualisent ; les fiches élèves montrent les **paiements et reçus de cette année-là**.
+2. Repassez sur l'année courante pour revenir à la saisie normale.
+
+> Les paiements s'enregistrent **toujours dans l'année courante** : sur une année antérieure, le bouton « Enregistrer un paiement » est désactivé.
+
+### Créer une nouvelle année scolaire
+
+Cliquez sur le bouton **+** sous la liste des années :
+
+1. Saisissez le libellé au format `AAAA-AAAA` (ex. `2025-2026`).
+2. Laissez cochée **« Recopier les classes et leurs frais »** pour retrouver la même grille de classes.
+3. Cochez **« Définir comme année courante »** uniquement au moment de la rentrée : les nouveaux paiements y seront enregistrés.
+
+> Astuce : créez la nouvelle année **sans** la définir comme courante pour préparer la rentrée tout en continuant la saisie de l'année en cours.
+
+---
+
+## 7. Questions fréquentes
 
 **Où sont stockées mes données ?**
 Dans votre dossier utilisateur : `%APPDATA%/EduPaie/edupaie.db` (Windows) ou `~/.config/EduPaie/` (Linux/macOS). Pensez à le sauvegarder.
@@ -115,4 +149,7 @@ Fiche élève → sélectionnez le paiement → **Annuler ce paiement…** avec 
 Oui. Il apparaît « Annulé » dans l'historique et reste consultable/téléchargeable.
 
 **Comment changer les tarifs d'une classe ?**
-Les montants sont dans la table `fee_plan` de la base (un outil de gestion des plans de frais peut être ajouté ultérieurement).
+Onglet **Classes** → sélectionnez la classe → **Modifier** → changez le montant. Les soldes des élèves de la classe sont recalculés automatiquement.
+
+**Comment voir ce qu'un élève devait l'année dernière ?**
+Barre latérale → sélectionnez l'année précédente dans la liste déroulante, puis ouvrez la fiche de l'élève : soldes et paiements affichés concernent cette année.

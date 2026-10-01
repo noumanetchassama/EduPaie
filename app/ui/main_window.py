@@ -7,6 +7,7 @@ L'application s'appuie exclusivement sur la nouvelle architecture
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -19,21 +20,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.services.audit_service import AuditService
 from app.services.balance_service import BalanceService
 from app.services.class_service import ClassService
 from app.services.payment_service import PaymentService
 from app.services.receipt_service import ReceiptService
+from app.services.school_year_service import SchoolYearService
 from app.services.student_service import StudentService
+from app.ui.audit_page import AuditLogPage
 from app.ui.classes_page import ClassesPage
 from app.ui.dashboard_page import DashboardPage
+from app.ui.school_year_dialog import NewSchoolYearDialog
 from app.ui.students_page import StudentsPage
-from app.ui.widgets import COLOR_BG, COLOR_PRIMARY, COLOR_PRIMARY_DARK
+from app.ui.widgets import COLOR_BG, COLOR_BORDER, COLOR_PRIMARY, COLOR_PRIMARY_DARK
 
 # (clé, libellé, icône native Qt — toujours rendue, même sans emoji)
 NAV_ITEMS = [
     ("dashboard", "Tableau de bord", QStyle.StandardPixmap.SP_ComputerIcon),
     ("students", "Élèves", QStyle.StandardPixmap.SP_DirHomeIcon),
     ("classes", "Classes", QStyle.StandardPixmap.SP_DirIcon),
+    ("audit", "Journal d'audit", QStyle.StandardPixmap.SP_FileDialogDetailedView),
 ]
 
 
@@ -53,8 +59,12 @@ class MainWindow(QMainWindow):
         self.class_service = ClassService(
             student_service=self.student_service)
         self.receipt_service = ReceiptService(payment_service=self.payment_service)
+        self.audit_service = AuditService()
+        self.school_year_service = SchoolYearService(
+            student_service=self.student_service)
 
         self._sidebar_expanded = True
+        self._selected_year_id = None  # année scolaire consultée (défaut : courante)
         self._build_ui()
         self._navigate("dashboard")
 
@@ -122,6 +132,50 @@ class MainWindow(QMainWindow):
                 border: none;
             }}
             QWidget#navScrollContent {{ background: transparent; }}
+            QLabel#yearCaption {{
+                color: rgba(255,255,255,0.65); font-size: 8pt;
+                background: transparent;
+            }}
+            QComboBox#yearCombo {{
+                color: #ffffff;
+                background-color: rgba(255,255,255,0.10);
+                border: 1px solid rgba(255,255,255,0.28);
+                border-radius: 6px;
+                padding: 3px 8px;
+                min-height: 24px;
+                font-size: 9.5pt;
+            }}
+            QComboBox#yearCombo:hover {{
+                background-color: rgba(255,255,255,0.18);
+            }}
+            QComboBox#yearCombo::drop-down {{ border: none; width: 20px; }}
+            QComboBox#yearCombo::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid rgba(255,255,255,0.8);
+                margin-right: 5px;
+            }}
+            QComboBox#yearCombo QAbstractItemView {{
+                background-color: #ffffff;
+                color: #1a202c;
+                border: 1px solid {COLOR_BORDER};
+                selection-background-color: {COLOR_PRIMARY};
+                selection-color: #ffffff;
+            }}
+            QPushButton#yearAdd {{
+                color: #ffffff;
+                background-color: rgba(255,255,255,0.12);
+                border: none;
+                border-radius: 6px;
+                font-weight: 700;
+                font-size: 12pt;
+                min-width: 0px;
+                padding: 0px;
+            }}
+            QPushButton#yearAdd:hover {{
+                background-color: rgba(255,255,255,0.28);
+            }}
             """
         )
 
@@ -180,12 +234,36 @@ class MainWindow(QMainWindow):
         nav_scroll.setWidget(nav_content)
         sidebar_layout.addWidget(nav_scroll, 1)
 
-        # Pied de barre latérale : année scolaire courante
-        self.school_year_label = QLabel("")
-        self.school_year_label.setObjectName("brandSubtitle")
-        self.school_year_label.setWordWrap(True)
-        sidebar_layout.addWidget(self.school_year_label)
-        self._refresh_school_year_label()
+        # Pied de barre latérale : année scolaire consultée
+        self.year_caption = QLabel("Année scolaire consultée")
+        self.year_caption.setObjectName("yearCaption")
+        sidebar_layout.addWidget(self.year_caption)
+
+        year_row = QWidget()
+        year_row.setStyleSheet("background: transparent;")
+        year_layout = QHBoxLayout(year_row)
+        year_layout.setContentsMargins(0, 0, 0, 0)
+        year_layout.setSpacing(6)
+
+        self.year_combo = QComboBox()
+        self.year_combo.setObjectName("yearCombo")
+        self.year_combo.setToolTip(
+            "Consulter les données d'une année scolaire "
+            "(tableau de bord, élèves, classes)")
+        self.year_combo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.year_combo.currentIndexChanged.connect(self._on_year_changed)
+        year_layout.addWidget(self.year_combo, 1)
+
+        self.year_add_btn = QPushButton("+")
+        self.year_add_btn.setObjectName("yearAdd")
+        self.year_add_btn.setFixedSize(28, 30)
+        self.year_add_btn.setToolTip("Créer une nouvelle année scolaire")
+        self.year_add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.year_add_btn.clicked.connect(self._create_school_year)
+        year_layout.addWidget(self.year_add_btn)
+
+        sidebar_layout.addWidget(year_row)
+        self._reload_year_combo()
 
         # ---- Zone de contenu ----
         self.stack = QStackedWidget()
@@ -207,10 +285,12 @@ class MainWindow(QMainWindow):
             class_service=self.class_service,
             on_data_changed=self._refresh_all,
         )
+        self.audit_page = AuditLogPage(audit_service=self.audit_service)
 
         self.stack.addWidget(self.dashboard_page)
         self.stack.addWidget(self.students_page)
         self.stack.addWidget(self.classes_page)
+        self.stack.addWidget(self.audit_page)
 
         root.addWidget(self.sidebar)
         root.addWidget(self.stack, 1)
@@ -236,7 +316,9 @@ class MainWindow(QMainWindow):
             btn.style().polish(btn)
 
         self.brand_sub.setVisible(self._sidebar_expanded)
-        self.school_year_label.setVisible(self._sidebar_expanded)
+        self.year_caption.setVisible(self._sidebar_expanded)
+        self.year_combo.setVisible(self._sidebar_expanded)
+        self.year_add_btn.setVisible(self._sidebar_expanded)
         arrow = (QStyle.StandardPixmap.SP_ArrowLeft if self._sidebar_expanded
                  else QStyle.StandardPixmap.SP_ArrowRight)
         self.toggle_btn.setIcon(self.style().standardIcon(arrow))
@@ -257,14 +339,17 @@ class MainWindow(QMainWindow):
         for k, btn in self._nav_buttons.items():
             btn.setChecked(k == key)
         if key == "dashboard":
-            self.dashboard_page.refresh()
+            self.dashboard_page.refresh(self._selected_year_id)
             self.stack.setCurrentWidget(self.dashboard_page)
         elif key == "students":
-            self.students_page.refresh()
+            self.students_page.refresh(self._selected_year_id)
             self.stack.setCurrentWidget(self.students_page)
         elif key == "classes":
-            self.classes_page.refresh()
+            self.classes_page.refresh(self._selected_year_id)
             self.stack.setCurrentWidget(self.classes_page)
+        elif key == "audit":
+            self.audit_page.refresh()
+            self.stack.setCurrentWidget(self.audit_page)
 
     def _open_student_from_dashboard(self, student_id: int):
         """Ouvre la fiche d'un élève depuis le tableau de bord."""
@@ -273,14 +358,54 @@ class MainWindow(QMainWindow):
 
     def _refresh_all(self):
         """Rafraîchit toutes les pages après une modification de données."""
-        self.dashboard_page.refresh()
-        self.students_page.refresh()
-        self.classes_page.refresh()
-        self._refresh_school_year_label()
+        self.dashboard_page.refresh(self._selected_year_id)
+        self.students_page.refresh(self._selected_year_id)
+        self.classes_page.refresh(self._selected_year_id)
+        self.audit_page.refresh()
+        self._reload_year_combo()
 
-    def _refresh_school_year_label(self):
+    # ------------------------------------------------------------------
+    # Sélection de l'année scolaire consultée
+    # ------------------------------------------------------------------
+
+    def _on_year_changed(self, index: int):
+        """Change l'année scolaire affichée par le tableau de bord et les pages."""
+        year_id = self.year_combo.itemData(index)
+        self._selected_year_id = year_id
+        self._refresh_all()
+
+    def _reload_year_combo(self):
+        """Recharge la liste des années scolaires en conservant la sélection."""
         try:
-            year = self.student_service.get_current_school_year()
-            self.school_year_label.setText(f"Année scolaire : {year.label}")
+            years = self.school_year_service.get_all()
+            current = self.school_year_service.get_current()
         except Exception:
-            self.school_year_label.setText("Année scolaire : non définie")
+            years, current = [], None
+
+        if self._selected_year_id is None and current is not None:
+            self._selected_year_id = current.id
+
+        self.year_combo.blockSignals(True)
+        self.year_combo.clear()
+        selected_index = 0
+        for i, y in enumerate(years):
+            text = f"{y.label} — courante" if (current and y.id == current.id) else y.label
+            self.year_combo.addItem(text, y.id)
+            if y.id == self._selected_year_id:
+                selected_index = i
+        self.year_combo.setCurrentIndex(selected_index)
+        self.year_combo.setEnabled(bool(years))
+        self.year_combo.blockSignals(False)
+
+        # L'année consultée suit la sélection effective du combo
+        if self.year_combo.currentData() is not None:
+            self._selected_year_id = self.year_combo.currentData()
+
+    def _create_school_year(self):
+        """Ouvre le dialogue de création d'une nouvelle année scolaire."""
+        dlg = NewSchoolYearDialog(self.school_year_service, parent=self)
+        if dlg.exec() == NewSchoolYearDialog.DialogCode.Accepted:
+            created = getattr(dlg, "created_year", None)
+            if created is not None:
+                self._selected_year_id = created.id
+            self._refresh_all()

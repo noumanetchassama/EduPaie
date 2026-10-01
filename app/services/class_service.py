@@ -11,6 +11,7 @@ Règles :
 from typing import List, Optional
 
 from app.config import format_euros
+from app.data.repositories.audit_repository import AuditRepository
 from app.data.repositories.class_repository import ClassRepository
 from app.data.repositories.fee_plan_repository import FeePlanRepository
 from app.data.repositories.school_year_repository import SchoolYearRepository
@@ -32,11 +33,13 @@ class ClassService:
         student_repo: Optional[StudentRepository] = None,
         school_year_repo: Optional[SchoolYearRepository] = None,
         student_service: Optional[StudentService] = None,
+        audit_repo: Optional[AuditRepository] = None,
     ):
         self.class_repo = class_repo or ClassRepository()
         self.fee_plan_repo = fee_plan_repo or FeePlanRepository()
         self.student_repo = student_repo or StudentRepository()
         self.school_year_repo = school_year_repo or SchoolYearRepository()
+        self.audit_repo = audit_repo or AuditRepository()
         self.student_service = student_service or StudentService(
             student_repo=self.student_repo,
             class_repo=self.class_repo,
@@ -47,9 +50,9 @@ class ClassService:
     # Lecture
     # ------------------------------------------------------------------
 
-    def get_all_classes(self):
-        """Liste des classes de l'année courante, avec frais et effectif."""
-        year = self.student_service.get_current_school_year()
+    def get_all_classes(self, school_year_id: Optional[int] = None):
+        """Liste des classes de l'année demandée (défaut : courante), avec frais et effectif."""
+        year = self._resolve_year(school_year_id)
         result = []
         for c in self.class_repo.get_all(year.id):
             fee = self._get_fee(c.id, year.id)
@@ -77,6 +80,14 @@ class ClassService:
             "due_date": fee.due_date if fee else None,
             "nb_students": len(self.student_repo.get_by_class(class_id)),
         }
+
+    def _resolve_year(self, school_year_id: Optional[int] = None):
+        """Année demandée, ou l'année courante par défaut."""
+        if school_year_id:
+            year = self.school_year_repo.get_by_id(school_year_id)
+            if year is not None:
+                return year
+        return self.student_service.get_current_school_year()
 
     def _get_fee(self, class_id: int, school_year_id: int):
         fees = self.fee_plan_repo.get_by_class(class_id, school_year_id)
@@ -134,6 +145,11 @@ class ClassService:
             amount_int=fee_int,
             due_date=due_date or None,
         ))
+
+        self.audit_repo.add(
+            "Création", "Classe", class_id, name,
+            f"Niveau : {level} — Frais : {format_euros(fee_int)}/an "
+            f"({year.label})")
         return class_model
 
     def update_class(self, class_id: int, name: str, level: str,
@@ -149,6 +165,11 @@ class ClassService:
         class_model = self.class_repo.get_by_id(class_id)
         if not class_model:
             raise NotFoundError(f"Classe introuvable (ID: {class_id})")
+        previous = {
+            "name": class_model.name,
+            "level": class_model.level,
+        }
+        previous_fee = self._get_fee(class_id, class_model.school_year_id)
 
         name = (name or "").strip()
         if not name:
@@ -179,6 +200,18 @@ class ClassService:
                 class_id=class_id, school_year_id=year.id,
                 label=self.FEE_LABEL, amount_int=fee_int,
                 due_date=due_date or None))
+
+        changes = []
+        if previous["name"] != name:
+            changes.append(f"Nom : « {previous['name']} » → « {name} »")
+        if previous["level"] != level:
+            changes.append(f"Niveau : {previous['level']} → {level}")
+        old_fee = previous_fee.amount_int if previous_fee else 0
+        if old_fee != fee_int:
+            changes.append(f"Frais : {format_euros(old_fee)} → {format_euros(fee_int)}")
+        self.audit_repo.add(
+            "Modification", "Classe", class_id, name,
+            " ; ".join(changes) or "Enregistrement sans changement")
         return class_model
 
     def delete_class(self, class_id: int) -> bool:
@@ -203,7 +236,12 @@ class ClassService:
                 f"{len(students)} élève(s) y sont encore inscrits. "
                 "Déplacez-les d'abord vers une autre classe.")
 
-        return self.class_repo.delete(class_id)
+        deleted = self.class_repo.delete(class_id)
+        if deleted:
+            self.audit_repo.add(
+                "Suppression", "Classe", class_id, class_model.name,
+                f"Niveau : {class_model.level}")
+        return deleted
 
     # ------------------------------------------------------------------
     # Helpers

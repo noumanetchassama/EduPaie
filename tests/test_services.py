@@ -13,11 +13,13 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.data.db import Database  # noqa: E402
+from app.data.repositories.audit_repository import AuditRepository  # noqa: E402
 from app.services.balance_service import BalanceService  # noqa: E402
 from app.services.class_service import ClassService  # noqa: E402
 from app.services.exceptions import BusinessRuleError, NotFoundError, ValidationError  # noqa: E402
 from app.services.payment_service import PaymentService  # noqa: E402
 from app.services.receipt_service import ReceiptService  # noqa: E402
+from app.services.school_year_service import SchoolYearService  # noqa: E402
 from app.services.student_service import StudentService  # noqa: E402
 
 
@@ -337,3 +339,206 @@ class TestClasses:
         class_service = ClassService(student_service=student_service)
         c = class_service.create_class("2nde Z", "2nde", 75000)
         assert class_service.delete_class(c.id) is True
+
+
+# ======================================================================
+# Journal d'audit
+# ======================================================================
+
+class TestAudit:
+    def test_student_lifecycle_audited(self, services):
+        student_service, _, _ = services
+        audit = AuditRepository()
+
+        s = make_student(student_service, name="Traceur", first="Alice")
+        entries = audit.get_all(entity="Élève", action="Création")
+        assert any("Alice" in (e["entity_label"] or "") for e in entries)
+
+        s.first_name = "Alicia"
+        student_service.update_student(s)
+        entries = audit.get_all(entity="Élève", action="Modification")
+        assert any("Alicia" in (e["entity_label"] or "")
+                   and "prénom" in (e["details"] or "") for e in entries)
+
+        student_service.delete_student(s.id)
+        entries = audit.get_all(entity="Élève", action="Suppression")
+        assert any("Traceur" in (e["entity_label"] or "") for e in entries)
+
+    def test_payment_lifecycle_audited(self, services):
+        student_service, payment_service, _ = services
+        audit = AuditRepository()
+        s = make_student(student_service, name="Auditeur", first="Paul")
+
+        p = payment_service.create_payment(
+            student_id=s.id, amount_euros=10000,
+            paid_on="2025-06-01", method="especes")
+        entries = audit.get_all(entity="Paiement", action="Création")
+        assert any(e["entity_label"] == p.receipt_no for e in entries)
+        assert any("10 000" in (e["details"] or "") for e in entries)
+
+        payment_service.update_payment(
+            payment_id=p.id, amount_euros=15000,
+            paid_on="2025-06-02", method="cheque")
+        entries = audit.get_all(entity="Paiement", action="Modification")
+        assert any(p.receipt_no in (e["entity_label"] or "")
+                   and "Montant" in (e["details"] or "") for e in entries)
+
+        payment_service.cancel_payment(p.id, "Erreur de saisie")
+        entries = audit.get_all(entity="Paiement", action="Annulation")
+        assert any("Erreur de saisie" in (e["details"] or "") for e in entries)
+
+        payment_service.delete_payment(p.id)
+        entries = audit.get_all(entity="Paiement", action="Suppression")
+        assert any(e["entity_label"] == p.receipt_no for e in entries)
+
+    def test_class_crud_audited(self, services):
+        student_service, _, _ = services
+        class_service = ClassService(student_service=student_service)
+        audit = AuditRepository()
+
+        c = class_service.create_class("6ème B", "6ème", 52000)
+        entries = audit.get_all(entity="Classe", action="Création")
+        assert any(e["entity_label"] == "6ème B" for e in entries)
+
+        class_service.update_class(c.id, "6ème B bis", "6ème", 54000)
+        entries = audit.get_all(entity="Classe", action="Modification")
+        assert any("6ème B bis" in (e["entity_label"] or "")
+                   and "Nom" in (e["details"] or "") for e in entries)
+
+        class_service.delete_class(c.id)
+        entries = audit.get_all(entity="Classe", action="Suppression")
+        assert any(e["entity_label"] == "6ème B bis" for e in entries)
+
+    def test_audit_filters_and_user(self, services):
+        student_service, payment_service, _ = services
+        audit = AuditRepository()
+        s = make_student(student_service, name="Filtre", first="Zoé")
+        payment_service.create_payment(
+            student_id=s.id, amount_euros=10000,
+            paid_on="2025-06-01", method="especes")
+
+        only_students = audit.get_all(entity="Élève")
+        assert all(e["entity"] == "Élève" for e in only_students)
+        assert only_students
+        assert all(e.get("user") for e in only_students)  # utilisateur renseigné
+        assert audit.count() >= len(only_students)
+
+
+class TestMoveStudent:
+    def test_move_updates_class_and_due(self, services):
+        student_service, payment_service, balance_service = services
+        classes = {c.name: c.id for c in student_service.get_all_classes()}
+        s = student_service.create_student(
+            last_name="Transfere", first_name="Marc",
+            class_id=classes["6ème A"])
+        year = student_service.get_current_school_year()
+        payment_service.create_payment(
+            student_id=s.id, amount_euros=10000,
+            paid_on="2025-06-01", method="especes")
+
+        moved = student_service.move_student(s.id, classes["5ème A"])
+        assert moved.class_id == classes["5ème A"]
+        # Le total dû suit la nouvelle classe (55 000 FCFA en 5ème)
+        assert balance_service.get_total_due(s.id, year.id) == 55000
+        # Les paiements sont conservés
+        assert balance_service.get_total_paid(s.id, year.id) == 10000
+
+    def test_move_audited_as_transfert(self, services):
+        student_service, _, _ = services
+        audit = AuditRepository()
+        classes = {c.name: c.id for c in student_service.get_all_classes()}
+        s = student_service.create_student(
+            last_name="Migrate", first_name="Nina", class_id=classes["6ème D"])
+        student_service.move_student(s.id, classes["5ème D"])
+        entries = audit.get_all(entity="Élève", action="Modification")
+        assert any("Transfert" in (e["details"] or "")
+                   and "6ème D" in (e["details"] or "")
+                   and "5ème D" in (e["details"] or "") for e in entries)
+
+    def test_move_to_same_class_refused(self, services):
+        student_service, _, _ = services
+        classes = {c.name: c.id for c in student_service.get_all_classes()}
+        s = make_student(student_service, name="Sedentaire", first="Olivier")
+        with pytest.raises(BusinessRuleError):
+            student_service.move_student(s.id, classes["6ème A"])
+
+    def test_move_unknown_student_refused(self, services):
+        student_service, _, _ = services
+        classes = {c.name: c.id for c in student_service.get_all_classes()}
+        with pytest.raises(NotFoundError):
+            student_service.move_student(999999, classes["6ème A"])
+
+
+# ======================================================================
+# Années scolaires (consultation des années précédentes)
+# ======================================================================
+
+class TestSchoolYears:
+    def test_create_year_copies_classes(self, services):
+        student_service, _, _ = services
+        school_year_service = SchoolYearService(student_service=student_service)
+        before = {c.name for c in student_service.get_all_classes()}
+
+        new_year = school_year_service.create_school_year("2099-2100")
+        assert new_year.id
+        assert not new_year.is_current  # l'année courante ne change pas
+
+        after = {c.name for c in student_service.get_all_classes()}
+        assert before == after  # même noms de classes
+
+    def test_create_duplicate_year_refused(self, services):
+        student_service, _, _ = services
+        school_year_service = SchoolYearService(student_service=student_service)
+        school_year_service.create_school_year("2098-2099")
+        with pytest.raises(BusinessRuleError):
+            school_year_service.create_school_year("2098-2099")
+
+    def test_invalid_label_refused(self, services):
+        student_service, _, _ = services
+        school_year_service = SchoolYearService(student_service=student_service)
+        for bad in ("2025", "2099-2098", "abcd-efgh", ""):
+            with pytest.raises(ValidationError):
+                school_year_service.create_school_year(bad)
+
+    def test_overview_per_year(self, services):
+        """Le tableau de bord respecte l'année consultée."""
+        student_service, payment_service, _ = services
+        school_year_service = SchoolYearService(student_service=student_service)
+        s = make_student(student_service, name="Annuel", first="Victor")
+        payment_service.create_payment(
+            student_id=s.id, amount_euros=10000,
+            paid_on="2025-06-01", method="especes")
+
+        current = student_service.get_current_school_year()
+        overview_cur = payment_service.get_overview(current.id)
+        row_cur = next(r for r in overview_cur["students"]
+                       if r["student"].id == s.id)
+        assert row_cur["total_paid_int"] == 10000
+
+        # Nouvelle année : classes recopiées, aucun paiement (années futures
+        # ou passées : l'élève apparaît si sa classe y existe)
+        new_year = school_year_service.create_school_year("2097-2098")
+        overview_new = payment_service.get_overview(new_year.id)
+        assert overview_new["total_paid_int"] == 0
+        row_new = next(r for r in overview_new["students"]
+                       if r["student"].id == s.id)
+        assert row_new["total_paid_int"] == 0
+        assert row_new["total_due_int"] > 0  # frais recopiés
+
+    def test_year_creation_audited(self, services):
+        student_service, _, _ = services
+        school_year_service = SchoolYearService(student_service=student_service)
+        audit = AuditRepository()
+        school_year_service.create_school_year("2096-2097")
+        entries = audit.get_all(entity="Année scolaire", action="Création")
+        assert any(e["entity_label"] == "2096-2097" for e in entries)
+
+    def test_set_current_year(self, services):
+        student_service, _, _ = services
+        school_year_service = SchoolYearService(student_service=student_service)
+        year = school_year_service.create_school_year("2095-2096")
+        school_year_service.set_current_year(year.id)
+        assert student_service.get_current_school_year().id == year.id
+        # Retour à l'année d'origine pour ne pas perturber les autres tests
+        others = [y for y in school_year_service.get_all() if y.id != year.id]
+        school_year_service.set_current_year(others[0].id)

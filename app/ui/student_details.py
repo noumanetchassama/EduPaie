@@ -46,15 +46,18 @@ class StudentDetailsDialog(QDialog):
 
     def __init__(self, student_service: StudentService, payment_service: PaymentService,
                  balance_service: BalanceService, receipt_service: ReceiptService,
-                 student_id: int, on_changed=None, parent=None):
+                 student_id: int, school_year_id: int = None,
+                 on_changed=None, parent=None):
         super().__init__(parent)
         self.student_service = student_service
         self.payment_service = payment_service
         self.balance_service = balance_service
         self.receipt_service = receipt_service
         self.student_id = student_id
+        self.school_year_id = school_year_id  # None = année courante
         self.on_changed = on_changed
         self.student = None
+        self.year = None
 
         self.setWindowTitle("Fiche élève")
         self.setMinimumSize(880, 620)
@@ -159,9 +162,25 @@ class StudentDetailsDialog(QDialog):
             icon=QStyle.StandardPixmap.SP_DialogApplyButton)
         self.new_payment_btn.clicked.connect(self.add_payment)
         actions.addWidget(self.new_payment_btn)
+
+        self.move_btn = make_button(
+            "Déplacer vers une autre classe…", role="secondary",
+            icon=QStyle.StandardPixmap.SP_ArrowForward,
+            tooltip="Transférer l'élève vers une autre classe de l'année courante")
+        self.move_btn.clicked.connect(self.move_student_dialog)
+        actions.addWidget(self.move_btn)
         layout.addWidget(actions_container)
 
     # ------------------------------------------------------------------
+
+    def _resolve_year(self):
+        """Année scolaire consultée (défaut : année courante)."""
+        if self.school_year_id:
+            year = self.student_service.school_year_repo.get_by_id(
+                self.school_year_id)
+            if year is not None:
+                return year
+        return self.student_service.get_current_school_year()
 
     def reload(self):
         """Recharge l'élève, son solde et l'historique des paiements."""
@@ -171,12 +190,23 @@ class StudentDetailsDialog(QDialog):
             self.reject()
             return
 
-        year = self.student_service.get_current_school_year()
-        class_obj = self.student_service.class_repo.get_by_id(self.student.class_id)
-        class_name = class_obj.name if class_obj else "—"
+        year = self._resolve_year()
+        self.year = year
+        current_year = self.student_service.get_current_school_year()
+
+        # Classe de l'élève pour l'année consultée (apparier par nom)
+        class_for_year = self.student_service.get_class_for_year(
+            self.student, year.id)
+        if class_for_year:
+            class_name = class_for_year.name
+        else:
+            class_obj = self.student_service.class_repo.get_by_id(
+                self.student.class_id)
+            class_name = class_obj.name if class_obj else "—"
 
         self.setWindowTitle(
-            f"Fiche élève — {self.student.first_name} {self.student.last_name}")
+            f"Fiche élève — {self.student.first_name} {self.student.last_name} "
+            f"({year.label})")
         self.name_label.setText(
             f"{self.student.first_name} {self.student.last_name}")
         parent_bits = [b for b in (
@@ -188,8 +218,20 @@ class StudentDetailsDialog(QDialog):
             f"Année : {year.label}"
             + (f"   •   Parent : {' — '.join(parent_bits)}" if parent_bits else ""))
 
+        # Les paiements s'enregistrent uniquement dans l'année courante
+        is_current = (current_year is not None and year.id == current_year.id)
+        self.new_payment_btn.setEnabled(is_current)
+        if is_current:
+            self.new_payment_btn.setToolTip("")
+        else:
+            self.new_payment_btn.setToolTip(
+                "Les paiements sont enregistrés dans l'année scolaire "
+                f"courante ({current_year.label if current_year else '?'}).")
+
         try:
-            info = self.balance_service.get_balance_info(self.student.id, year.id)
+            info = self.balance_service.get_balance_info(
+                self.student.id, year.id,
+                class_id=class_for_year.id if class_for_year else None)
             self.status_badge.set_status(info["status"])
             self.balance_label.setText(
                 f"Solde : {info['balance_formatted']}\n"
@@ -202,15 +244,19 @@ class StudentDetailsDialog(QDialog):
         self._load_payments()
 
     def _load_payments(self):
-        """Affiche l'historique chronologique avec solde cumulé."""
+        """Affiche l'historique chronologique avec solde cumulé (année consultée)."""
+        year = self.year or self.student_service.get_current_school_year()
         payments = self.payment_service.get_student_payments(
-            self.student_id, valid_only=False)
+            self.student_id, school_year_id=year.id, valid_only=False)
         # Ordre chronologique pour le calcul du solde après paiement
         chronological = sorted(payments, key=lambda p: (p.paid_on or "", p.id or 0))
 
-        year = self.student_service.get_current_school_year()
+        class_for_year = self.student_service.get_class_for_year(
+            self.student, year.id) if self.student else None
         try:
-            total_due = self.balance_service.get_total_due(self.student_id, year.id)
+            total_due = self.balance_service.get_total_due(
+                self.student_id, year.id,
+                class_id=class_for_year.id if class_for_year else None)
         except Exception:
             total_due = 0
 
@@ -349,13 +395,51 @@ class StudentDetailsDialog(QDialog):
     # ------------------------------------------------------------------
 
     def add_payment(self):
-        """Ouvre le dialogue d'enregistrement de paiement."""
+        """Ouvre le dialogue d'enregistrement de paiement (année courante)."""
         from app.ui.payment_dialog import PaymentDialog
         dlg = PaymentDialog(
             self.payment_service, self.balance_service,
             self.student_service, self.student, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted and self.on_changed:
             self.reload()
+            self.on_changed()
+
+    def move_student_dialog(self):
+        """Déplace l'élève vers une autre classe (liste de l'année courante)."""
+        if not self.student:
+            return
+        from PySide6.QtWidgets import QInputDialog
+
+        classes = self.student_service.get_all_classes()  # année courante
+        others = [c for c in classes if c.id != self.student.class_id]
+        if not others:
+            QMessageBox.information(
+                self, "Aucune autre classe",
+                "Créez d'abord une autre classe dans la page « Classes ».")
+            return
+
+        name, ok = QInputDialog.getItem(
+            self, "Déplacer l'élève",
+            f"Nouvelle classe pour {self.student.first_name} "
+            f"{self.student.last_name} :",
+            [c.name for c in others], 0, False)
+        if not ok:
+            return
+        target = next((c for c in others if c.name == name), None)
+        if not target:
+            return
+        try:
+            self.student_service.move_student(self.student.id, target.id)
+        except EduPaieException as e:
+            QMessageBox.critical(self, "Déplacement impossible", str(e))
+            return
+        QMessageBox.information(
+            self, "Élève déplacé",
+            f"{self.student.first_name} {self.student.last_name} a été déplacé "
+            f"en « {target.name} ».\nLe total dû a été recalculé "
+            "et l'opération est tracée dans le journal d'audit.")
+        self.reload()
+        if self.on_changed:
             self.on_changed()
 
     def edit_payment(self):

@@ -12,6 +12,7 @@ EduPaie est une application desktop **Python 3.10+ / PySide6** (architecture MVC
 ├────────────────────────────────────────────────────────┤
 │ Services (app/services)  — logique métier              │
 │   student_service │ payment_service │ balance_service  │
+│   class_service │ school_year_service │ audit_service  │
 │   receipt_service │ exceptions                         │
 ├────────────────────────────────────────────────────────┤
 │ Data (app/data) — accès données                        │
@@ -35,6 +36,7 @@ Les couches communiquent par modèles (`app/models`) : `Student`, `Payment`, `Cl
 | `payment` | Paiements | `amount_int` centimes, `receipt_no` UNIQUE, statut `valide`/`annule` |
 | `receipt_snapshot` | Reçu figé (JSON) | 1:1 avec payment, source du PDF |
 | `receipt_counter` | Compteur par année | numérotation `REC-AAAA-NNNNNN` |
+| `audit_log` | Journal d'audit | action/entity/entity_id/label/détails/utilisateur, indexé |
 
 **Argent = entiers (FCFA, pas de sous-unité)** partout — pas d'erreurs d'arrondi. Formatage à l'affichage : `app.config.format_euros` (ex. `586 000 FCFA`). Les bases créées en « centimes d'euro » avant la v2 sont converties automatiquement au démarrage (×100, flag `fcfa_v2` en table `meta`).
 
@@ -74,11 +76,22 @@ Un échec quelconque annule tout (rollback) : jamais de paiement sans numéro ni
 ### 3.5 Suppression protégée
 `StudentService.delete_student` refuse la suppression d'un élève ayant des paiements (`BusinessRuleError`) — les reçus émis doivent rester traçables. L'annulation de paiement est un **soft delete** (`status='annule'`, motif, date) : le reçu reste consultable, la numérotation n'est jamais réutilisée.
 
+### 3.6 Consultation multi-années
+- `PaymentService.get_overview(school_year_id=None)` et `ClassService.get_all_classes(school_year_id=None)` acceptent une année scolaire ; `BalanceService` accepte un `class_id` de substitution.
+- Un élève étant rattaché à **sa** classe (celle de son inscription), la consultation d'une année antérieure **apparie la classe par son nom** dans l'année cible (`StudentService.get_class_for_year`) — les classes étant recréées à l'identique à chaque rentrée par `SchoolYearService.create_school_year(copy_classes=True)`.
+- Un élève sans classe équivalente cette année-là **et** sans paiement n'est pas affiché (il n'était pas suivi cette année-là).
+- `create_payment` enregistre **toujours** dans l'année courante ; l'UI désactive la saisie de paiement sur les autres années (`StudentsPage.pay_btn`, `StudentDetailsDialog.new_payment_btn`).
+
+### 3.7 Déplacement d'élève et journal d'audit
+- `StudentService.move_student(student_id, new_class_id)` : changement de classe, total dû recalculé (frais de la nouvelle classe), paiements conservés.
+- Chaque opération des services (`StudentService`, `PaymentService`, `ClassService`, `SchoolYearService`) écrit une entrée dans `audit_log` via `AuditRepository` : action (`Création/Modification/Suppression/Annulation`), entité (`Élève/Paiement/Classe/Année scolaire`), libellé lisible, détails (motif, anciennes → nouvelles valeurs, transfert) et utilisateur système (`getpass.getuser()`).
+- `AuditService` expose la lecture filtrable à l'UI (page `audit_page.py`, filtres élément + action).
+
 ## 4. Interface (PySide6)
 
-- `MainWindow` : navigation latérale (boutons checkables) + `QStackedWidget` (2 pages) ; services instanciés une fois et injectés.
-- `StudentsPage` : recherche live + filtres classe/statut combinés, tableau avec badges `StatusBadge`, actions contextuelles ; les IDs circulent via `Qt.UserRole` (jamais via le texte).
-- `StudentDetailsDialog` : historique trié chronologiquement pour le **solde cumulé**, affiché du plus récent au plus ancien ; annulations avec motif.
+- `MainWindow` : navigation latérale (boutons checkables) + `QStackedWidget` (4 pages : tableau de bord, élèves, classes, journal d'audit) ; services instanciés une fois et injectés. En pied de barre latérale : `yearCombo` (année scolaire consultée, rechargé par `_reload_year_combo`) + bouton `+` ouvrant `NewSchoolYearDialog` ; la sélection propage `school_year_id` à toutes les pages.
+- `StudentsPage` : recherche live + filtres classe/statut combinés, tableau avec badges `StatusBadge`, actions contextuelles ; les IDs circulent via `Qt.UserRole` (jamais via le texte) ; lignes calculées via `get_overview(school_year_id)`.
+- `StudentDetailsDialog` : historique trié chronologiquement pour le **solde cumulé**, affiché du plus récent au plus ancien ; annulations avec motif ; filtre par année consultée ; bouton « Déplacer vers une autre classe… » (`QInputDialog` sur les classes de l'année courante).
 - `PaymentDialog` : aperçu temps réel du solde après saisie, avertissement de dépassement, refus bloquant.
 - `DashboardPage` : `PaymentService.get_overview()` calcule toutes les stats en une passe (une requête SUM par élève).
 - Thème : `app/ui/theme.py` (palette + QSS « bleu professionnel éducatif »), composants partagés dans `app/ui/widgets.py`.
@@ -101,7 +114,10 @@ Au premier lancement : si la DB de travail est absente/vide et qu'une seed embar
 - élèves : création + matricule auto, doublon refusé, validation des noms, suppression protégée ;
 - statuts : Non payé → Partiel → Soldé (correctif du bug « Non payé affiché Partiel ») ;
 - paiements : dépassement refusé, montant/date/mode invalides, numéros séquentiels uniques, annulation avec restauration du solde, `get_overview` cohérent ;
-- reçus : PDF valide depuis le snapshot, **immutabilité du snapshot** après paiements ultérieurs.
+- reçus : PDF valide depuis le snapshot, **immutabilité du snapshot** après paiements ultérieurs ;
+- **audit** : cycle élève/paiement/classe tracé (création, modification avec champs, suppression, annulation avec motif), filtres et utilisateur renseigné ;
+- **déplacement** : classe et total dû recalculés, entrée « Transfert de classe », déplacement vers la même classe refusé ;
+- **années scolaires** : création avec recopie des classes, doublon refusé, libellés invalides refusés, `get_overview` par année, `set_current`, audit des créations d'année.
 
 ```bash
 python -m pytest tests/ -v
@@ -121,6 +137,7 @@ python -m pytest tests/ -v
 
 ## 8. Limites connues & pistes
 
-- Pas d'interface de gestion des plans de frais / classes / années (SQL direct aujourd'hui).
+- L'appariement des classes entre années se fait **par nom** : un élève qui a changé de nom de classe (redoublement dans une autre série) n'apparaît pas dans l'ancienne année sauf s'il y a des paiements. Un historique d'inscription (`student_class_history`) lèverait cette limite.
+- Les plans de frais multiples par classe (cantine…) sont supportés en base mais seul « Scolarité » est éditable dans l'UI.
 - Export CSV, recherche de reçu par numéro, multilingue : extensibles via les services existants.
 - L'impression directe passe par la visionneuse PDF système (pas de QPrinter natif).

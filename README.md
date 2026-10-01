@@ -7,6 +7,9 @@ Application desktop de gestion des paiements de scolarité (monnaie : **FCFA**),
 ## Fonctionnalités
 
 - **Gestion des élèves** : ajout, modification, suppression (avec garde-fou : impossible s'il existe des paiements) ; matricule généré automatiquement ; liste **recherchable** (nom, prénom, matricule) et **filtrable** par classe **et** par statut.
+- **Déplacement d'élève** : depuis la fiche, bouton **« Déplacer vers une autre classe… »** — le total dû est recalculé automatiquement et le transfert est tracé.
+- **Années scolaires** : liste déroulante dans la barre latérale pour **consulter les données des années précédentes** (tableau de bord, élèves, classes, fiches et reçus) ; création d'une nouvelle année (avec recopie des classes et de leurs frais) et choix de l'année courante ; les paiements s'enregistrent toujours dans l'année courante.
+- **Journal d'audit** : page dédiée listant **qui a créé, modifié, supprimé ou annulé** élèves, paiements, classes et années scolaires (action colorée, libellé, détails, utilisateur système), avec filtres par élément et par action.
 - **Gestion des classes** : page dédiée pour créer, modifier et supprimer les classes et leurs **frais de scolarité FCFA** (suppression refusée si des élèves y sont inscrits) ; modifier les frais recalcule automatiquement les soldes de tous les élèves de la classe.
 - **Enregistrement des paiements** : montant, date, mode (espèces / chèque / virement / mobile money), référence optionnelle ; **le solde ne peut jamais devenir négatif** — un avertissement temps réel signale tout montant supérieur au solde restant.
 - **Calcul automatique du solde** : solde = total dû (plans de frais par classe) − somme des paiements valides ; **statut dérivé** (Soldé / Partiellement payé / Non payé) affiché dans la liste et la fiche élève.
@@ -43,14 +46,11 @@ app/
 │   ├── schema.sql          # Schéma idempotent + données de base
 │   └── repositories/       # Accès données (SQL uniquement)
 ├── services/               # Logique métier et validations
-│   ├── student_service.py  # CRUD élèves, matricules, année courante
-│   ├── payment_service.py  # Paiements atomiques, snapshots, statistiques
-│   ├── balance_service.py  # Soldes et statuts
-│   └── receipt_service.py  # Reçus PDF depuis le snapshot figé
-├── services/               # Logique métier et validations
-│   ├── student_service.py  # CRUD élèves, matricules, année courante
-│   ├── payment_service.py  # Paiements atomiques, snapshots, statistiques
+│   ├── student_service.py  # CRUD élèves, matricules, année courante, transferts
+│   ├── payment_service.py  # Paiements atomiques, snapshots, statistiques par année
 │   ├── class_service.py    # CRUD classes + plans de frais
+│   ├── school_year_service.py  # Création d'années, recopie des classes
+│   ├── audit_service.py    # Lecture du journal d'audit
 │   ├── balance_service.py  # Soldes et statuts
 │   └── receipt_service.py  # Reçus PDF depuis le snapshot figé
 main.py                     # Point d'entrée (logging, DB, thème, excepthook)
@@ -83,7 +83,7 @@ L'onglet **Tableau de bord** affiche les cartes (élèves, encaissé, restant d�
 python -m pytest tests/ -v
 ```
 
-16 tests couvrent : CRUD élèves, matricules dupliqués, validations (nom, montants, dates, modes), statuts (non payé → partiel → soldé), dépassement de solde refusé, annulation avec restauration du solde, séquence de numéros de reçus, immutabilité des snapshots, génération PDF.
+38 tests couvrent : CRUD élèves, matricules dupliqués, validations (nom, montants, dates, modes), statuts (non payé → partiel → soldé), dépassement de solde refusé, annulation avec restauration du solde, séquence de numéros de reçus, immutabilité des snapshots, génération PDF, **journal d'audit**, **déplacement d'élève** et **années scolaires multi-années**.
 
 ## Packaging (Windows)
 

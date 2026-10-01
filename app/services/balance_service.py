@@ -36,7 +36,8 @@ class BalanceService:
         self.fee_plan_repo = fee_plan_repo if fee_plan_repo else FeePlanRepository()
         self.student_repo = student_repo if student_repo else StudentRepository()
 
-    def get_balance(self, student_id: int, school_year_id: int) -> int:
+    def get_balance(self, student_id: int, school_year_id: int,
+                    class_id: Optional[int] = None) -> int:
         """
         Calcule le solde restant pour un élève (en cents).
 
@@ -45,6 +46,9 @@ class BalanceService:
         Args:
             student_id: Identifiant de l'élève
             school_year_id: Identifiant de l'année scolaire
+            class_id: Classe à utiliser pour les frais (défaut : classe
+                actuelle de l'élève). Sert à consulter une année antérieure,
+                où la classe est retrouvée par son nom.
 
         Returns:
             int: Solde en cents (positif = dette, négatif = trop-perçu)
@@ -57,7 +61,8 @@ class BalanceService:
             raise NotFoundError(f"Élève introuvable (ID: {student_id})")
 
         # Total dû : somme des fee_plan de sa classe
-        total_due = self.fee_plan_repo.get_total_by_class(student.class_id, school_year_id)
+        total_due = self.fee_plan_repo.get_total_by_class(
+            class_id or student.class_id, school_year_id)
 
         # Total payé : somme des paiements valides
         total_paid = self.payment_repo.get_total_by_student(student_id, school_year_id, valid_only=True)
@@ -65,13 +70,15 @@ class BalanceService:
         # Solde = dû - payé
         return total_due - total_paid
 
-    def get_total_due(self, student_id: int, school_year_id: int) -> int:
+    def get_total_due(self, student_id: int, school_year_id: int,
+                      class_id: Optional[int] = None) -> int:
         """
         Calcule le total dû pour un élève (en cents).
 
         Args:
             student_id: Identifiant de l'élève
             school_year_id: Identifiant de l'année scolaire
+            class_id: Classe à utiliser (défaut : classe actuelle de l'élève)
 
         Returns:
             int: Total dû en cents
@@ -80,7 +87,8 @@ class BalanceService:
         if not student:
             raise NotFoundError(f"Élève introuvable (ID: {student_id})")
 
-        return self.fee_plan_repo.get_total_by_class(student.class_id, school_year_id)
+        return self.fee_plan_repo.get_total_by_class(
+            class_id or student.class_id, school_year_id)
 
     def get_total_paid(self, student_id: int, school_year_id: int) -> int:
         """
@@ -97,7 +105,8 @@ class BalanceService:
         """
         return self.payment_repo.get_total_by_student(student_id, school_year_id, valid_only=True)
 
-    def get_status(self, student_id: int, school_year_id: int) -> str:
+    def get_status(self, student_id: int, school_year_id: int,
+                   class_id: Optional[int] = None) -> str:
         """
         Détermine le statut de paiement d'un élève.
 
@@ -110,12 +119,13 @@ class BalanceService:
         Args:
             student_id: Identifiant de l'élève
             school_year_id: Identifiant de l'année scolaire
+            class_id: Classe à utiliser (défaut : classe actuelle de l'élève)
 
         Returns:
             str: Statut de paiement
         """
-        balance = self.get_balance(student_id, school_year_id)
-        total_due = self.get_total_due(student_id, school_year_id)
+        balance = self.get_balance(student_id, school_year_id, class_id)
+        total_due = self.get_total_due(student_id, school_year_id, class_id)
         total_paid = self.get_total_paid(student_id, school_year_id)
 
         # Déterminer le statut (3 statuts exigés : Soldé / Partiel / Non payé).
@@ -167,21 +177,23 @@ class BalanceService:
 
         return False
 
-    def get_balance_info(self, student_id: int, school_year_id: int) -> dict:
+    def get_balance_info(self, student_id: int, school_year_id: int,
+                         class_id: Optional[int] = None) -> dict:
         """
         Retourne toutes les informations de solde pour un élève.
 
         Args:
             student_id: Identifiant de l'élève
             school_year_id: Identifiant de l'année scolaire
+            class_id: Classe à utiliser (défaut : classe actuelle de l'élève)
 
         Returns:
             dict: Dictionnaire avec total_due, total_paid, balance, status
         """
-        total_due = self.get_total_due(student_id, school_year_id)
+        total_due = self.get_total_due(student_id, school_year_id, class_id)
         total_paid = self.get_total_paid(student_id, school_year_id)
-        balance = self.get_balance(student_id, school_year_id)
-        status = self.get_status(student_id, school_year_id)
+        balance = self.get_balance(student_id, school_year_id, class_id)
+        status = self.get_status(student_id, school_year_id, class_id)
 
         return {
             "total_due_int": total_due,

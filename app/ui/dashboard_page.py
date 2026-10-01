@@ -125,17 +125,19 @@ class DashboardPage(QWidget):
 
     # ------------------------------------------------------------------
 
-    def refresh(self):
-        """Recalcule toutes les statistiques et le tableau."""
+    def refresh(self, school_year_id=None):
+        """Recalcule toutes les statistiques pour l'année scolaire consultée."""
         try:
-            self._overview = self.payment_service.get_overview()
+            self._overview = self.payment_service.get_overview(school_year_id)
         except Exception:
             self._overview = None
             return
 
         o = self._overview
         year = o["school_year"]
-        self.findChild(QLabel, "headerSubtitle")
+        if hasattr(self, "subtitle_label"):
+            self.subtitle_label.setText(
+                f"Situation des paiements — Année scolaire {year.label}")
 
         self.card_students.set_value(str(o["nb_students"]))
         self.card_collected.set_value(format_euros(o["total_paid_int"]))

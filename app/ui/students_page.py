@@ -177,26 +177,37 @@ class StudentsPage(QWidget):
     # Données
     # ------------------------------------------------------------------
 
-    def refresh(self):
-        """Recalcule les lignes (élèves + soldes) et applique les filtres."""
-        year = self.student_service.get_current_school_year()
-        classes = {c.id: c.name for c in self.student_service.get_all_classes()}
+    def refresh(self, school_year_id=None):
+        """Recalcule les lignes (élèves + soldes) pour l'année consultée."""
+        try:
+            overview = self.payment_service.get_overview(school_year_id)
+        except Exception:
+            overview = None
 
-        self._rows = []
-        for s in self.student_service.get_all_students():
-            try:
-                info = self.balance_service.get_balance_info(s.id, year.id)
-            except Exception:
-                continue
-            self._rows.append({
-                "student": s,
-                "class_name": classes.get(s.class_id, "—"),
-                "school_year": year.label,
-                "total_due": info["total_due_int"],
-                "total_paid": info["total_paid_int"],
-                "balance": info["balance_int"],
-                "status": info["status"],
-            })
+        if overview:
+            year = overview["school_year"]
+            self._rows = [{
+                "student": r["student"],
+                "class_name": r["class_name"],
+                "school_year": r["school_year"],
+                "total_due": r["total_due_int"],
+                "total_paid": r["total_paid_int"],
+                "balance": r["balance_int"],
+                "status": r["status"],
+            } for r in overview["students"]]
+            self._year_id = year.id
+            self._year_label = year.label
+        else:
+            self._rows = []
+            self._year_id = school_year_id
+            self._year_label = ""
+
+        try:
+            current_year = self.student_service.get_current_school_year()
+        except Exception:
+            current_year = None
+        self._is_current_year = (
+            current_year is None or self._year_id in (None, current_year.id))
 
         self._reload_class_filter()
         self._apply_filters()
@@ -295,8 +306,15 @@ class StudentsPage(QWidget):
 
     def _on_selection(self):
         has = self._selected_row() is not None
-        for btn in (self.pay_btn, self.details_btn, self.edit_btn, self.delete_btn):
+        for btn in (self.details_btn, self.edit_btn, self.delete_btn):
             btn.setEnabled(has)
+        # Les paiements s'enregistrent uniquement dans l'année courante
+        can_pay = has and getattr(self, "_is_current_year", True)
+        self.pay_btn.setEnabled(can_pay)
+        self.pay_btn.setToolTip(
+            "" if can_pay else
+            "Les paiements sont enregistrés dans l'année scolaire courante : "
+            "sélectionnez-la dans la barre latérale.")
 
     def _notify_change(self):
         if self.on_data_changed:
@@ -353,6 +371,13 @@ class StudentsPage(QWidget):
         sel = self._selected_row()
         if not sel:
             return
+        if not getattr(self, "_is_current_year", True):
+            QMessageBox.information(
+                self, "Année consultée",
+                "Vous consultez une année antérieure. Sélectionnez l'année "
+                "courante dans la barre latérale pour enregistrer un "
+                "paiement.")
+            return
         dlg = PaymentDialog(self.payment_service, self.balance_service,
                             self.student_service, sel["student"], parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -366,9 +391,10 @@ class StudentsPage(QWidget):
         dlg = StudentDetailsDialog(
             self.student_service, self.payment_service, self.balance_service,
             self.receipt_service, sel["student"].id,
+            school_year_id=getattr(self, "_year_id", None),
             on_changed=self._notify_change, parent=self)
         dlg.exec()
-        self.refresh()
+        self.refresh(getattr(self, "_year_id", None))
 
     def open_student_details(self, student_id: int):
         """Ouvre directement la fiche d'un élève (utilisé par le tableau de bord)."""
@@ -381,6 +407,7 @@ class StudentsPage(QWidget):
         dlg = StudentDetailsDialog(
             self.student_service, self.payment_service, self.balance_service,
             self.receipt_service, student_id,
+            school_year_id=getattr(self, "_year_id", None),
             on_changed=self._notify_change, parent=self)
         dlg.exec()
-        self.refresh()
+        self.refresh(getattr(self, "_year_id", None))
