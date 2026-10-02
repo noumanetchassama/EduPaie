@@ -18,8 +18,6 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from app.config import format_euros
-from app.services.balance_service import BalanceService
 from app.services.exceptions import EduPaieException
 from app.services.payment_service import PaymentService
 from app.services.student_service import StudentService
