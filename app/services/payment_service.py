@@ -134,9 +134,16 @@ class PaymentService:
                     "Un paiement ne peut pas rendre le solde négatif."
                 )
 
+        # Solde AVANT encaissement : le snapshot doit montrer la situation
+        # avant/après ce paiement, or l'insertion est déjà faite au moment
+        # où le snapshot est construit (sinon le montant est déduit deux fois).
+        balance_before = self.balance_service.get_balance(
+            student_id, school_year.id)
+
         # Numéro de reçu + insertion + snapshot : une seule transaction
         payment_id, receipt_no = self._insert_payment_atomic(
-            student, school_year, amount_int, paid_on, method, reference
+            student, school_year, amount_int, paid_on, method, reference,
+            balance_before=balance_before,
         )
 
         self.audit_repo.add(
@@ -158,10 +165,15 @@ class PaymentService:
         return payment
 
     def _insert_payment_atomic(self, student, school_year, amount_int, paid_on,
-                               method, reference):
+                               method, reference, balance_before=None):
         """
         Insère le paiement, incrémente le compteur de reçus et écrit le
         snapshot dans UNE SEULE transaction SQLite.
+
+        Args:
+            balance_before: solde restant AVANT ce paiement (calculé hors
+                transaction, sinon l'insertion déjà faite fausserait le
+                « solde avant » du reçu).
         """
         year = int(school_year.label[:4])
         receipt_no = None
@@ -209,7 +221,8 @@ class PaymentService:
 
             # 3. Snapshot figé pour ré-impression identique
             snapshot = self._build_receipt_snapshot(
-                student, school_year, amount_int, paid_on, method, reference, receipt_no
+                student, school_year, amount_int, paid_on, method, reference,
+                receipt_no, balance_before=balance_before,
             )
             import json
 
@@ -221,14 +234,24 @@ class PaymentService:
         return payment_id, receipt_no
 
     def _build_receipt_snapshot(self, student, school_year, amount_int, paid_on,
-                                method, reference, receipt_no) -> dict:
-        """Construit le dictionnaire de snapshot du reçu (figé à l'émission)."""
+                                method, reference, receipt_no,
+                                balance_before=None) -> dict:
+        """
+        Construit le dictionnaire du snapshot du reçu (figé à l'émission).
+
+        Args:
+            balance_before: solde restant AVANT ce paiement ; calculé par
+                défaut (à n'utiliser que si le paiement n'est pas encore
+                enregistré en base).
+        """
         from app.config import SCHOOL_ADDRESS, SCHOOL_EMAIL, SCHOOL_NAME, SCHOOL_PHONE
 
         class_obj = self.class_repo.get_by_id(student.class_id)
         class_name = class_obj.name if class_obj else "Classe inconnue"
 
-        balance_before = self.balance_service.get_balance(student.id, school_year.id)
+        if balance_before is None:
+            balance_before = self.balance_service.get_balance(
+                student.id, school_year.id)
         balance_after = balance_before - amount_int
 
         return {
@@ -324,32 +347,32 @@ class PaymentService:
         year = self.school_year_repo.get_by_id(payment.school_year_id)
         other_paid = self.payment_repo.get_total_by_student(
             payment.student_id, payment.school_year_id)
-        balance_others = self.fee_plan_repo.get_total_by_class(
+        balance_before = self.fee_plan_repo.get_total_by_class(
             student.class_id, payment.school_year_id) - (other_paid - payment.amount_int)
-        if amount_int > balance_others:
+        if amount_int > balance_before:
             raise BusinessRuleError(
                 f"Le montant ({format_euros(amount_int)}) dépasserait le solde "
-                f"restant ({format_euros(balance_others)}) après modification.")
+                f"restant ({format_euros(balance_before)}) après modification.")
 
-        # Mise à jour + snapshot régénéré (numéro de reçu inchangé)
+        # Mise à jour + snapshot régénéré (numéro de reçu inchangé),
+        # en UNE seule écriture : le snapshot est mis à jour avec le
+        # paiement dans la même transaction.
         previous = {
             "amount_int": payment.amount_int,
             "paid_on": payment.paid_on,
             "method": payment.method,
             "reference": payment.reference,
         }
+        snapshot = self._build_receipt_snapshot(
+            student, year, amount_int, paid_on, method, reference,
+            payment.receipt_no, balance_before=balance_before)
         payment.amount_int = amount_int
         payment.paid_on = paid_on
         payment.method = method
         payment.reference = reference
-        updated = self.payment_repo.update(payment)
+        updated = self.payment_repo.update(payment, snapshot=snapshot)
         if not updated:
             raise NotFoundError(f"Paiement introuvable (ID: {payment_id})")
-
-        snapshot = self._build_receipt_snapshot(
-            student, year, amount_int, paid_on, method, reference,
-            payment.receipt_no)
-        self.payment_repo.update(payment, snapshot=snapshot)
 
         changes = []
         if previous["amount_int"] != amount_int:
@@ -466,7 +489,9 @@ class PaymentService:
                 nb_not_settled, students (liste de dicts)
         """
         school_year = self._resolve_school_year(school_year_id)
-        students = self.student_repo.get_all(active_only=False)
+        # Les élèves archivés (is_active = 0) sont exclus : ils ne sont
+        # plus suivis et leurs paiements ne comptent plus dans les totaux.
+        students = self.student_repo.get_all(active_only=True)
         year_classes = self.class_repo.get_all(school_year.id)
         classes = {c.id: c.name for c in year_classes}
         class_id_by_name = {c.name: c.id for c in year_classes}
