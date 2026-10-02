@@ -6,7 +6,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
-    QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
@@ -32,8 +31,10 @@ from app.ui.widgets import (
     FlowLayout,
     PageHeader,
     StatusBadge,
+    ask_yes_no,
     make_button,
     make_card,
+    short_status,
 )
 
 STATUS_FILTERS = {
@@ -57,6 +58,7 @@ class StudentsPage(QWidget):
         self.receipt_service = receipt_service
         self.on_data_changed = on_data_changed
         self._rows = []  # lignes calculées (élève + montants)
+        self._year_id = None  # année scolaire affichée (conservée par Actualiser)
 
         self._build_ui()
         self.refresh()
@@ -122,16 +124,17 @@ class StudentsPage(QWidget):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(6, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(7, QHeaderView.ResizeMode.ResizeToContents)
+        # Colonnes de texte élastiques, données dimensionnées au contenu,
+        # badge de statut à largeur fixe → aucun espace mort à droite.
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        for col in (2, 3, 4, 5, 6):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(7, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(7, 150)
+        header.setStretchLastSection(False)
         self.table.setAlternatingRowColors(True)
-        self.table.horizontalHeader().setStretchLastSection(False)
         self.table.doubleClicked.connect(lambda _: self.view_details())
         layout.addWidget(self.table, 1)
 
@@ -188,7 +191,14 @@ class StudentsPage(QWidget):
     # ------------------------------------------------------------------
 
     def refresh(self, school_year_id=None):
-        """Recalcule les lignes (élèves + soldes) pour l'année consultée."""
+        """Recalcule les lignes (élèves + soldes) pour l'année consultée.
+
+        Un appel sans argument (bouton « Actualiser », qui transmet un
+        booléen depuis Qt) conserve l'année affichée au lieu de repasser
+        à l'année courante.
+        """
+        if not school_year_id:
+            school_year_id = getattr(self, "_year_id", None)
         try:
             overview = self.payment_service.get_overview(school_year_id)
         except Exception:
@@ -255,6 +265,10 @@ class StudentsPage(QWidget):
                                  (r["student"].first_name or "").lower()))
         self._fill_table(rows)
 
+        # Ajuster la hauteur des lignes pour les badges de statut
+        for row in range(self.table.rowCount()):
+            self.table.setRowHeight(row, 40)
+
     def _fill_table(self, rows):
         # Conserver la sélection courante si elle existe encore
         selected_id = None
@@ -284,7 +298,8 @@ class StudentsPage(QWidget):
                                        if r[key] == 0 else Qt.GlobalColor.red)
                 self.table.setItem(i, col, cell)
 
-            badge = StatusBadge(r["status"])
+            badge = StatusBadge(short_status(r["status"]))
+            badge.setToolTip(r["status"])
             self.table.setCellWidget(i, 7, badge)
 
         # Sélectionner automatiquement la 1re ligne (ou l'ancienne) : les
@@ -358,22 +373,42 @@ class StudentsPage(QWidget):
         if not sel:
             return
         s = sel["student"]
-        reply = QMessageBox.question(
-            self, "Confirmer la suppression",
-            f"Supprimer définitivement l'élève {s.first_name} {s.last_name} ?\n\n"
-            "La suppression est refusée si des paiements existent "
-            "(l'historique des reçus doit être conservé).",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No)
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-        try:
-            self.student_service.delete_student(s.id)
-        except EduPaieException as e:
-            QMessageBox.critical(self, "Suppression impossible", str(e))
-            return
-        QMessageBox.information(self, "Élève supprimé",
-                                "L'élève a été supprimé.")
+        n_payments = self.student_service.count_payments(s.id)
+
+        if n_payments:
+            # Élève avec historique : archivage au lieu de la suppression
+            # physique (les reçus émis doivent rester consultables).
+            if not ask_yes_no(
+                    self, "Archiver l'élève",
+                    f"{s.first_name} {s.last_name} a {n_payments} paiement(s) "
+                    "enregistré(s).\n\n"
+                    "Pour préserver l'historique des reçus, l'élève sera "
+                    "ARCHIVÉ : il disparaîtra des listes et du tableau de bord, "
+                    "mais ses paiements restent enregistrés.\n\n"
+                    "Archiver cet élève ?"):
+                return
+            try:
+                self.student_service.archive_student(s.id)
+            except EduPaieException as e:
+                QMessageBox.critical(self, "Archivage impossible", str(e))
+                return
+            QMessageBox.information(
+                self, "Élève archivé",
+                "L'élève a été archivé et retiré des listes.\n"
+                "Ses paiements et reçus sont conservés.")
+        else:
+            if not ask_yes_no(
+                    self, "Confirmer la suppression",
+                    f"Supprimer définitivement l'élève {s.first_name} {s.last_name} ?\n\n"
+                    "Cette action est irréversible (aucun paiement enregistré)."):
+                return
+            try:
+                self.student_service.delete_student(s.id)
+            except EduPaieException as e:
+                QMessageBox.critical(self, "Suppression impossible", str(e))
+                return
+            QMessageBox.information(self, "Élève supprimé",
+                                    "L'élève a été supprimé avec succès.")
         self.refresh()
         self._notify_change()
 
