@@ -11,7 +11,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QHBoxLayout,
     QHeaderView,
     QLabel,
     QLineEdit,
@@ -26,13 +25,11 @@ from PySide6.QtWidgets import (
 from app.services.class_service import ClassService
 from app.services.exceptions import EduPaieException
 from app.ui.widgets import (
-    COLOR_DANGER,
-    COLOR_PRIMARY,
     COLOR_TEXT_SECONDARY,
     FlowLayout,
     PageHeader,
+    ask_yes_no,
     make_button,
-    make_card,
     make_dialog_buttons,
 )
 
@@ -49,11 +46,14 @@ class ClassForm(QDialog):
         self.class_row = class_row  # dict retourné par get_all_classes()
 
         self.setWindowTitle("Modifier la classe" if class_row else "Nouvelle classe")
-        self.setMinimumWidth(420)
+        self.setMinimumWidth(440)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
         form = QFormLayout()
-        form.setSpacing(10)
+        form.setSpacing(12)
+        form.setContentsMargins(0, 0, 0, 0)
 
         self.name_edit = QLineEdit()
         if class_row:
@@ -130,6 +130,7 @@ class ClassesPage(QWidget):
         self.class_service = class_service
         self.on_data_changed = on_data_changed
         self._rows = []
+        self._year_id = None  # année scolaire affichée (conservée par Actualiser)
 
         self._build_ui()
         self.refresh()
@@ -138,8 +139,8 @@ class ClassesPage(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(14)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
 
         # ---- En-tête ----
         self.add_btn = make_button(
@@ -161,15 +162,21 @@ class ClassesPage(QWidget):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        # Colonnes de texte élastiques, données dimensionnées au contenu.
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(4, 150)
+        header.setStretchLastSection(False)
         self.table.setAlternatingRowColors(True)
         layout.addWidget(self.table, 1)
 
         # ---- Barre d'actions (flow responsive) ----
         actions_container = QWidget()
-        actions = FlowLayout(actions_container, margin=0, spacing=8)
+        actions = FlowLayout(actions_container, margin=0, spacing=10)
 
         self.edit_btn = make_button(
             "Modifier", role="secondary",
@@ -186,7 +193,7 @@ class ClassesPage(QWidget):
         actions.addWidget(self.delete_btn)
 
         self.count_label = QLabel("")
-        self.count_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY};")
+        self.count_label.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-size: 10pt;")
         actions.addWidget(self.count_label)
 
         self.refresh_btn = make_button(
@@ -203,7 +210,15 @@ class ClassesPage(QWidget):
     # ------------------------------------------------------------------
 
     def refresh(self, school_year_id=None):
-        """Recharge la liste des classes de l'année scolaire consultée."""
+        """Recharge la liste des classes de l'année scolaire consultée.
+
+        Un appel sans argument (bouton « Actualiser », qui transmet un
+        booléen depuis Qt) conserve l'année affichée au lieu de repasser
+        à l'année courante.
+        """
+        if not school_year_id:
+            school_year_id = getattr(self, "_year_id", None)
+        self._year_id = school_year_id
         try:
             self._rows = self.class_service.get_all_classes(school_year_id)
         except EduPaieException:
@@ -262,7 +277,7 @@ class ClassesPage(QWidget):
         dlg = ClassForm(self.class_service, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             QMessageBox.information(self, "Classe créée",
-                                    "La classe a bien été créée.")
+                                    "La classe a bien été créée avec succès.")
             self.refresh()
             self._notify()
 
@@ -273,7 +288,7 @@ class ClassesPage(QWidget):
         dlg = ClassForm(self.class_service, class_row=sel, parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             QMessageBox.information(self, "Classe modifiée",
-                                    "Les modifications ont été enregistrées.\n"
+                                    "Les modifications ont été enregistrées avec succès.\n"
                                     "Les soldes des élèves de la classe ont "
                                     "été recalculés.")
             self.refresh()
@@ -284,12 +299,17 @@ class ClassesPage(QWidget):
         if not sel:
             return
         c = sel["class"]
-        reply = QMessageBox.question(
-            self, "Confirmer la suppression",
-            f"Supprimer la classe « {c.name} » et son plan de frais ?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No)
-        if reply != QMessageBox.StandardButton.Yes:
+        nb_students = sel.get("nb_students", 0)
+        if nb_students:
+            # Les élèves sans paiement partent avec la classe ; le service
+            # refuse si l'un d'eux a des paiements (message explicite).
+            text = (f"Supprimer la classe « {c.name} », son plan de frais "
+                    f"et ses {nb_students} élève(s) ?\n\n"
+                    "Les élèves seront supprimés avec la classe — cette "
+                    "action est irréversible.")
+        else:
+            text = f"Supprimer la classe « {c.name} » et son plan de frais ?"
+        if not ask_yes_no(self, "Confirmer la suppression", text):
             return
         try:
             self.class_service.delete_class(c.id)
@@ -297,6 +317,6 @@ class ClassesPage(QWidget):
             QMessageBox.critical(self, "Suppression impossible", str(e))
             return
         QMessageBox.information(self, "Classe supprimée",
-                                "La classe a été supprimée.")
+                                "La classe a été supprimée avec succès.")
         self.refresh()
         self._notify()
