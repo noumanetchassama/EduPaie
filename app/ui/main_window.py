@@ -64,6 +64,9 @@ class MainWindow(QMainWindow):
             student_service=self.student_service)
 
         self._sidebar_expanded = True
+        # True si le repli courant a été fait automatiquement (redimensionnement) :
+        # un repli manuel ne doit jamais être annulé par une resize event.
+        self._sidebar_auto_collapsed = False
         self._selected_year_id = None  # année scolaire consultée (défaut : courante)
         self._build_ui()
         self._navigate("dashboard")
@@ -106,7 +109,10 @@ class MainWindow(QMainWindow):
                 font-size: 11pt;
                 font-weight: 500;
                 text-align: left;
-                min-width: 0px;
+            }}
+            QPushButton#navButton[collapsed="true"] {{
+                padding: 11px 0px;
+                text-align: center;
             }}
             QPushButton#navButton:hover {{
                 background-color: rgba(255,255,255,0.12);
@@ -197,6 +203,8 @@ class MainWindow(QMainWindow):
         self.toggle_btn.setIconSize(QSize(18, 18))
         self.toggle_btn.setToolTip("Replier / déplier le menu")
         self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.toggle_btn.setIcon(self.style().standardIcon(
+            QStyle.StandardPixmap.SP_ArrowLeft))
         self.toggle_btn.clicked.connect(self.toggle_sidebar)
         brand_row.addWidget(self.toggle_btn)
         sidebar_layout.addLayout(brand_row)
@@ -301,35 +309,51 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def toggle_sidebar(self):
-        """Replie/déplie la barre latérale (mode compact avec icônes)."""
-        self._sidebar_expanded = not self._sidebar_expanded
-        width = self._sidebar_width if self._sidebar_expanded \
-            else self._sidebar_collapsed_width
+        """Replie/déplie la barre latérale (mode compact avec icônes).
+
+        Ce repli est EXPLICITE : il prévaut sur l'adaptation automatique
+        au redimensionnement.
+        """
+        self._sidebar_auto_collapsed = False
+        self._set_sidebar_expanded(not self._sidebar_expanded)
+
+    def _set_sidebar_expanded(self, expanded: bool):
+        """Applique l'état (dépliée/repliée) de la barre latérale."""
+        self._sidebar_expanded = expanded
+        width = self._sidebar_width if expanded else self._sidebar_collapsed_width
         self.sidebar.setFixedWidth(width)
 
         for (key, label, icon), btn in zip(
                 NAV_ITEMS, self._nav_buttons.values()):
-            btn.setText(label if self._sidebar_expanded else "")
-            btn.setProperty("collapsed", not self._sidebar_expanded)
+            btn.setText(label if expanded else "")
+            btn.setProperty("collapsed", not expanded)
             btn.setToolTip(label)
             btn.style().unpolish(btn)
             btn.style().polish(btn)
 
-        self.brand_sub.setVisible(self._sidebar_expanded)
-        self.year_caption.setVisible(self._sidebar_expanded)
-        self.year_combo.setVisible(self._sidebar_expanded)
-        self.year_add_btn.setVisible(self._sidebar_expanded)
-        arrow = (QStyle.StandardPixmap.SP_ArrowLeft if self._sidebar_expanded
+        self.brand_sub.setVisible(expanded)
+        self.year_caption.setVisible(expanded)
+        self.year_combo.setVisible(expanded)
+        self.year_add_btn.setVisible(expanded)
+        arrow = (QStyle.StandardPixmap.SP_ArrowLeft if expanded
                  else QStyle.StandardPixmap.SP_ArrowRight)
         self.toggle_btn.setIcon(self.style().standardIcon(arrow))
 
     def resizeEvent(self, event):
-        """Replie automatiquement la barre latérale sous 1000 px de large."""
+        """Adapte la barre latérale à la largeur de la fenêtre.
+
+        - Sous 1000 px : repli automatique (mode icônes).
+        - Au-dessus : dépliage automatique UNIQUEMENT si le repli était
+          automatique — le choix manuel de l'utilisateur est conservé.
+        """
         super().resizeEvent(event)
         if self.width() < 1000 and self._sidebar_expanded:
-            self.toggle_sidebar()
-        elif self.width() >= 1000 and not self._sidebar_expanded:
-            self.toggle_sidebar()
+            self._sidebar_auto_collapsed = True
+            self._set_sidebar_expanded(False)
+        elif (self.width() >= 1000 and not self._sidebar_expanded
+              and self._sidebar_auto_collapsed):
+            self._sidebar_auto_collapsed = False
+            self._set_sidebar_expanded(True)
 
     # ------------------------------------------------------------------
     # Navigation
