@@ -105,7 +105,7 @@ def get_professional_stylesheet() -> str:
         font-weight: 600;
         font-size: 10pt;
         min-height: 38px;
-        min-width: 140px;
+        min-width: 150px;
     }
     QPushButton:hover { background-color: #3b5d87; }
     QPushButton:pressed { background-color: #1a365d; }
@@ -137,9 +137,16 @@ def get_professional_stylesheet() -> str:
     }
 
     QDialogButtonBox QPushButton {
-        min-width: 120px;
+        min-width: 130px;
         padding: 10px 20px;
         min-height: 38px;
+    }
+
+    /* Icônes dans les boutons */
+    QPushButton QToolButton {
+        background: transparent;
+        border: none;
+        padding: 0;
     }
 
     QToolButton {
@@ -303,14 +310,52 @@ def get_professional_stylesheet() -> str:
     QMessageBox QDialogButtonBox {
         padding: 12px 24px 24px 24px;
     }
+    /* Boutons des boîtes de dialogue : la règle QPushButton globale
+       (texte blanc) rendrait « Oui / Non / OK » illisibles (blanc sur blanc). */
+    QMessageBox QPushButton,
+    QInputDialog QPushButton {
+        background-color: #e2e8f0;
+        color: #2d3748;
+        border: 1px solid #cbd5e0;
+        border-radius: 8px;
+        min-width: 90px;
+        min-height: 32px;
+        font-weight: 600;
+    }
+    QMessageBox QPushButton:hover,
+    QInputDialog QPushButton:hover {
+        background-color: #cbd5e0;
+        border-color: #a0aec0;
+    }
+    QMessageBox QPushButton:pressed,
+    QInputDialog QPushButton:pressed {
+        background-color: #a0aec0;
+    }
+    QMessageBox QPushButton:default,
+    QInputDialog QPushButton:default {
+        background-color: #2c5282;
+        color: #ffffff;
+        border: 2px solid #2c5282;
+    }
+    QMessageBox QPushButton:default:hover,
+    QInputDialog QPushButton:default:hover {
+        background-color: #3b5d87;
+    }
+    QMessageBox QPushButton:disabled,
+    QInputDialog QPushButton:disabled {
+        background-color: #edf2f7;
+        color: #a0aec0;
+        border-color: #e2e8f0;
+    }
 
     QToolTip {
         background-color: #1a365d;
         color: #ffffff;
         border: 1px solid #2c5282;
         border-radius: 6px;
-        padding: 6px 10px;
-        font-size: 9.5pt;
+        padding: 8px 12px;
+        font-size: 10pt;
+        font-weight: 500;
     }
 
     QStatusBar {
