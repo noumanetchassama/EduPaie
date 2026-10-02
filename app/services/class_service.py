@@ -4,7 +4,8 @@ Service pour la gestion des classes et de leurs plans de frais.
 Règles :
 - Une classe est rattachée à l'année scolaire courante
 - Le plan de frais « Scolarité » (montant FCFA) est créé/modifié avec elle
-- Suppression refusée si la classe contient des élèves
+- Suppression : les élèves sans paiement sont supprimés avec la classe,
+  la suppression est refusée dès qu'un élève a des paiements
   (l'historique des reçus doit rester cohérent)
 """
 
@@ -56,7 +57,7 @@ class ClassService:
         result = []
         for c in self.class_repo.get_all(year.id):
             fee = self._get_fee(c.id, year.id)
-            students = self.student_repo.get_by_class(c.id)
+            students = self.student_repo.get_by_class(c.id, active_only=True)
             result.append({
                 "class": c,
                 "fee_int": fee.amount_int if fee else 0,
@@ -218,11 +219,12 @@ class ClassService:
         """
         Supprime une classe (et son plan de frais, en CASCADE).
 
-        La suppression est refusée si la classe contient encore des élèves :
-        déplacez-les d'abord vers une autre classe.
+        Les élèves de la classe sont supprimés avec elle S'ils n'ont
+        aucun paiement ; dès qu'un élève a des paiements, la suppression
+        est refusée afin de préserver l'historique des reçus.
 
         Raises:
-            BusinessRuleError: Si la classe contient des élèves
+            BusinessRuleError: Si un élève de la classe a des paiements
             NotFoundError: Classe inexistante
         """
         class_model = self.class_repo.get_by_id(class_id)
@@ -230,17 +232,32 @@ class ClassService:
             raise NotFoundError(f"Classe introuvable (ID: {class_id})")
 
         students = self.student_repo.get_by_class(class_id)
+        deleted_students = 0
         if students:
-            raise BusinessRuleError(
-                f"Impossible de supprimer « {class_model.name} » : "
-                f"{len(students)} élève(s) y sont encore inscrits. "
-                "Déplacez-les d'abord vers une autre classe.")
+            paying = [s for s in students
+                      if self.student_service.count_payments(s.id)]
+            if paying:
+                raise BusinessRuleError(
+                    f"Impossible de supprimer « {class_model.name} » : "
+                    f"{len(paying)} élève(s) sur {len(students)} ont des "
+                    "paiements enregistrés et l'historique des reçus doit "
+                    "être conservé. Supprimez d'abord ces paiements ou "
+                    "déplacez ces élèves vers une autre classe.")
+            # Aucun paiement : les élèves partent avec la classe (sinon la
+            # contrainte FK sur student.class_id bloquerait la suppression).
+            for s in students:
+                if self.student_repo.delete(s.id):
+                    deleted_students += 1
 
         deleted = self.class_repo.delete(class_id)
         if deleted:
+            details = f"Niveau : {class_model.level}"
+            if deleted_students:
+                details += (f" — {deleted_students} élève(s) supprimé(s) "
+                            "avec la classe (aucun paiement)")
             self.audit_repo.add(
                 "Suppression", "Classe", class_id, class_model.name,
-                f"Niveau : {class_model.level}")
+                details)
         return deleted
 
     # ------------------------------------------------------------------
