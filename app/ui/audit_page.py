@@ -5,11 +5,9 @@ Liste qui a créé, modifié, supprimé ou annulé des élèves, paiements,
 classes et années scolaires, avec filtres par élément et par action.
 """
 
-from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QComboBox,
-    QHBoxLayout,
     QHeaderView,
     QLabel,
     QStyle,
@@ -37,6 +35,7 @@ ACTION_COLORS = {
     "Création": COLOR_SUCCESS,
     "Modification": COLOR_INFO,
     "Suppression": COLOR_DANGER,
+    "Archivage": COLOR_WARNING,
     "Annulation": COLOR_WARNING,
 }
 
