@@ -360,6 +360,39 @@ class StudentService:
                 f"{class_obj.name if class_obj else '?'}")
         return deleted
 
+    def count_payments(self, student_id: int) -> int:
+        """Nombre de paiements enregistrés pour un élève (annulés inclus)."""
+        return len(self.payment_repo.get_by_student(student_id, valid_only=False))
+
+    def archive_student(self, student_id: int) -> bool:
+        """
+        Archive un élève (is_active = False) : il disparaît des listes et
+        du tableau de bord, tandis que ses paiements et reçus restent
+        consultables (l'historique financier est intouché).
+
+        Retourne False si l'élève était déjà archivé.
+
+        Raises:
+            NotFoundError: Si l'élève n'existe pas
+        """
+        student = self.student_repo.get_by_id(student_id)
+        if not student:
+            raise NotFoundError(f"Étudiant introuvable (ID: {student_id})")
+        if not student.is_active:
+            return False
+
+        student.is_active = False
+        if not self.student_repo.update(student):
+            raise NotFoundError(f"Étudiant introuvable (ID: {student_id})")
+
+        class_obj = self.class_repo.get_by_id(student.class_id)
+        self.audit_repo.add(
+            "Archivage", "Élève", student_id,
+            f"{student.first_name} {student.last_name} ({student.matricule})",
+            "Élève archivé (paiements et reçus conservés) — classe : "
+            f"{class_obj.name if class_obj else '?'}")
+        return True
+
     def get_student(self, student_id: int) -> Optional[Student]:
         """Récupère un étudiant par son identifiant."""
         return self.student_repo.get_by_id(student_id)
