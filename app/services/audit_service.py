@@ -24,6 +24,7 @@ ACTION_FILTERS = {
     "Créations": "Création",
     "Modifications": "Modification",
     "Suppressions": "Suppression",
+    "Archivages": "Archivage",
     "Annulations": "Annulation",
 }
 
