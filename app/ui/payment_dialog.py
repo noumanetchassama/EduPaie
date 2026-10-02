@@ -9,8 +9,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QFrame,
-    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
@@ -159,19 +157,26 @@ class PaymentDialog(QDialog):
                 "Le montant saisi dépasse le solde restant : le solde ne peut "
                 "pas devenir négatif. Enregistrement refusé."
             )
+            self.warning_label.setStyleSheet(
+                f"color: {COLOR_DANGER}; font-weight: 700; font-size: 10pt;")
             self.warning_label.show()
+            # Le bouton reste inactif tant que la saisie est invalide :
+            # cohérent avec le message « Enregistrement refusé ».
+            self.save_btn.setEnabled(False)
         elif remaining == 0:
             self.warning_label.setText(
                 "✓ Ce paiement solde intégralement les frais de scolarité.")
             self.warning_label.setStyleSheet(
-                f"color: {COLOR_SUCCESS}; font-weight: 600;")
+                f"color: {COLOR_SUCCESS}; font-weight: 600; font-size: 10pt;")
             self.warning_label.show()
+            self.save_btn.setEnabled(True)
         else:
             self.warning_label.setText(
                 f"Solde restant après ce paiement : {format_euros(remaining)}")
             self.warning_label.setStyleSheet(
-                f"color: {COLOR_TEXT_SECONDARY}; font-weight: 600;")
+                f"color: {COLOR_TEXT_SECONDARY}; font-weight: 600; font-size: 10pt;")
             self.warning_label.show()
+            self.save_btn.setEnabled(True)
 
     def _save(self):
         text = self.amount_edit.text().replace(" ", "").replace("\u202f", "").replace(",", ".")
