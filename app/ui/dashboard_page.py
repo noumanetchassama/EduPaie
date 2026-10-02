@@ -20,7 +20,7 @@ from app.config import format_euros
 from app.services.payment_service import PaymentService
 from app.services.student_service import StudentService
 from app.ui.widgets import (
-    COLOR_INFO,
+    COLOR_DANGER,
     COLOR_PRIMARY,
     COLOR_SUCCESS,
     COLOR_TEXT_SECONDARY,
@@ -31,9 +31,8 @@ from app.ui.widgets import (
     StatusBadge,
     make_button,
     make_card,
+    short_status,
 )
-
-COLOR_DANGER_CARD = "#dd5c5c"
 
 STATUS_FILTERS = {
     "Tous les statuts": None,
@@ -53,6 +52,7 @@ class DashboardPage(QWidget):
         self.student_service = student_service
         self.on_open_student = on_open_student
         self._overview = None
+        self._year_id = None  # année scolaire affichée (conservée par Actualiser)
 
         self._build_ui()
 
@@ -60,26 +60,29 @@ class DashboardPage(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(14)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(18)
 
         self.refresh_btn = make_button(
             "Actualiser", role="secondary",
             icon=QStyle.StandardPixmap.SP_BrowserReload)
         self.refresh_btn.clicked.connect(self.refresh)
-        header = PageHeader(
+        self.header = PageHeader(
             "Tableau de bord",
             "Situation globale des paiements de scolarité")
-        header.add_action(self.refresh_btn)
-        layout.addWidget(header)
+        self.header.add_action(self.refresh_btn)
+        layout.addWidget(self.header)
 
-        # ---- Cartes statistiques (flow responsive : 4→2→1 selon largeur) ----
+        # ---- Cartes statistiques HERO : 4 cartes alignées sur une même
+        # ligne (mêmes largeurs et même hauteur), 4 → 2 → 1 selon la
+        # largeur — la hauteur libérée revient à la liste des élèves ----
         cards_container = QWidget()
-        cards = FlowLayout(cards_container, margin=0, spacing=12)
+        cards = FlowLayout(cards_container, margin=0, spacing=14,
+                           equalize=True)
         self.card_students = StatCard("Élèves inscrits", COLOR_PRIMARY)
         self.card_collected = StatCard("Total encaissé", COLOR_SUCCESS)
         self.card_remaining = StatCard("Total restant dû", COLOR_WARNING)
-        self.card_unsettled = StatCard("Élèves non soldés", COLOR_DANGER_CARD)
+        self.card_unsettled = StatCard("Élèves non soldés", COLOR_DANGER)
         for card in (self.card_students, self.card_collected,
                      self.card_remaining, self.card_unsettled):
             cards.addWidget(card)
@@ -87,15 +90,17 @@ class DashboardPage(QWidget):
 
         # ---- Répartition par statut ----
         breakdown = QHBoxLayout()
-        breakdown.setSpacing(12)
+        breakdown.setSpacing(18)
         self.soldes_label = QLabel()
         self.partiels_label = QLabel()
         self.impayes_label = QLabel()
         for lbl in (self.soldes_label, self.partiels_label, self.impayes_label):
-            lbl.setStyleSheet("font-size: 11pt;")
+            lbl.setStyleSheet("font-size: 11.5pt; font-weight: 600;")
             breakdown.addWidget(lbl)
         breakdown.addStretch()
-        breakdown.addWidget(QLabel("Filtrer par statut :"))
+        filter_label = QLabel("Filtrer par statut :")
+        filter_label.setStyleSheet("font-weight: 700; font-size: 10.5pt;")
+        breakdown.addWidget(filter_label)
         self.status_combo = QComboBox()
         for label in STATUS_FILTERS:
             self.status_combo.addItem(label)
@@ -111,22 +116,46 @@ class DashboardPage(QWidget):
         self.table.setSelectionMode(QTableWidget.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(
-            QHeaderView.ResizeMode.Stretch)
+        # Colonnes de texte élastiques, colonnes de données dimensionnées
+        # au contenu, badge de statut à largeur fixe → aucun espace mort.
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        for col in (2, 3, 4, 5):
+            header.setSectionResizeMode(col, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(6, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(6, 150)
+        header.setStretchLastSection(False)
         self.table.setAlternatingRowColors(True)
-        self.table.horizontalHeader().setStretchLastSection(True)
+        self.table.setStyleSheet(
+            """
+            QTableWidget {
+                font-size: 10pt;
+            }
+            QTableWidget::item {
+                padding: 8px;
+            }
+            """
+        )
         self.table.doubleClicked.connect(self._open_selected)
         layout.addWidget(self.table, 1)
 
-        hint = QLabel("Astuce : double-cliquez sur un élève pour ouvrir sa fiche "
+        hint = QLabel("💡 Astuce : double-cliquez sur un élève pour ouvrir sa fiche "
                       "et consulter l'historique de ses paiements.")
-        hint.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-size: 9pt;")
+        hint.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-size: 10pt; font-style: italic; font-weight: 500;")
         layout.addWidget(hint)
 
     # ------------------------------------------------------------------
 
     def refresh(self, school_year_id=None):
-        """Recalcule toutes les statistiques pour l'année scolaire consultée."""
+        """Recalcule toutes les statistiques pour l'année scolaire consultée.
+
+        Un appel sans argument (bouton « Actualiser », qui transmet un
+        booléen depuis Qt) conserve l'année affichée au lieu de repasser
+        à l'année courante.
+        """
+        if not school_year_id:
+            school_year_id = getattr(self, "_year_id", None)
         try:
             self._overview = self.payment_service.get_overview(school_year_id)
         except Exception:
@@ -135,9 +164,9 @@ class DashboardPage(QWidget):
 
         o = self._overview
         year = o["school_year"]
-        if hasattr(self, "subtitle_label"):
-            self.subtitle_label.setText(
-                f"Situation des paiements — Année scolaire {year.label}")
+        self._year_id = year.id
+        self.header.subtitle_label.setText(
+            f"Situation des paiements — Année scolaire {year.label}")
 
         self.card_students.set_value(str(o["nb_students"]))
         self.card_collected.set_value(format_euros(o["total_paid_int"]))
@@ -154,7 +183,7 @@ class DashboardPage(QWidget):
             f"● <b style='color:{COLOR_WARNING};'>Partiels :</b> "
             f"{o['nb_partial']} ({o['nb_partial'] * 100 // total} %)")
         self.impayes_label.setText(
-            f"● <b style='color:{COLOR_DANGER_CARD};'>Non payés :</b> "
+            f"● <b style='color:{COLOR_DANGER};'>Non payés :</b> "
             f"{o['nb_unpaid']} ({o['nb_unpaid'] * 100 // total} %)")
 
         self._apply_filter()
@@ -189,7 +218,11 @@ class DashboardPage(QWidget):
                                        if r[key] == 0 else Qt.GlobalColor.red)
                 self.table.setItem(i, col, cell)
 
-            self.table.setCellWidget(i, 6, StatusBadge(r["status"]))
+            self.table.setCellWidget(i, 6, StatusBadge(short_status(r["status"])))
+
+        # Ajuster la hauteur des lignes pour les badges de statut
+        for row in range(self.table.rowCount()):
+            self.table.setRowHeight(row, 40)
 
     def _open_selected(self):
         row = self.table.currentRow()
