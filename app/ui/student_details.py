@@ -3,7 +3,7 @@ Fiche élève : informations, solde, historique chronologique des paiements,
 consultation / téléchargement / réimpression des reçus.
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QFileDialog,
@@ -28,6 +28,7 @@ from app.ui.widgets import (
     COLOR_TEXT_SECONDARY,
     FlowLayout,
     StatusBadge,
+    ask_yes_no,
     make_button,
     make_card,
 )
@@ -109,8 +110,11 @@ class StudentDetailsDialog(QDialog):
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        # « Solde après » tient dans la table, la colonne Statut est fixe
+        # pour loger le badge sans rognage.
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(5, 140)
         self.table.verticalHeader().setVisible(False)
         self.table.itemSelectionChanged.connect(self._on_selection)
         layout.addWidget(self.table, 1)
@@ -300,25 +304,79 @@ class StudentDetailsDialog(QDialog):
             after_item = QTableWidgetItem(
                 format_euros(after) if after is not None else "—")
             after_item.setTextAlignment(Qt.AlignmentFlag.AlignRight
-                                        | Qt.AlignmentFlag.AlignVCenter)
+                                         | Qt.AlignmentFlag.AlignVCenter)
             self.table.setItem(row, 4, after_item)
 
+        # 1) Dimensionner colonne et lignes AVANT l'insertion des widgets de
+        #    statut : un cell widget installé dans une cellule non dimensionnée
+        #    conserve sa géométrie d'insertion (127×27 dans 140×40) et la
+        #    pastille est alors tronquée (11 px rognés en bas).
+        self.table.resizeColumnsToContents()
+        for row in range(self.table.rowCount()):
+            self.table.setRowHeight(row, 40)
+        # La colonne « Solde après » reste élastique (étirée ci-dessus),
+        # la colonne Statut garde sa largeur fixe définie à la construction.
+        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(5, 140)
+
+        # 2) Installer les widgets de statut dans des cellules déjà dimensionnées…
+        for row, p in enumerate(display):
             status_widget = QWidget()
             lay = QHBoxLayout(status_widget)
-            lay.setContentsMargins(6, 4, 6, 4)
+            lay.setContentsMargins(8, 4, 8, 4)
             badge = StatusBadge("Valide" if p.is_valid else "Annulé")
             lay.addWidget(badge)
             self.table.setCellWidget(row, 5, status_widget)
 
-        self.table.resizeColumnsToContents()
-        # Ajuster la colonne Solde après pour qu'elle ne soit pas trop large
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        # 3) …puis ré-appliquer la géométrie : Qt dimensionne le cell widget
+        #    à son sizeHint du moment de l'insertion (avant polissage du style)
+        #    et le re-centre ensuite sans jamais le recalculer.
+        self._sync_status_widgets()
+
         # Sélectionner automatiquement le paiement le plus récent :
         # les boutons de reçus sont actifs dès l'ouverture de la fiche.
         if self.table.rowCount():
             self.table.selectRow(0)
         else:
             self._on_selection()
+
+    def _sync_status_widgets(self):
+        """Aligne chaque widget de statut sur sa cellule (colonne 5).
+
+        Qt installe les cell widgets avec le sizeHint du moment de l'insertion
+        (avant polissage du style) puis les re-centre sur cette taille obsolète
+        à chaque show/redimensionnement : le wrapper resterait alors en
+        127×27 dans une cellule de 140×40 et la pastille serait tronquée.
+        """
+        table = getattr(self, "table", None)
+        if table is None:
+            return
+        for row in range(table.rowCount()):
+            widget = table.cellWidget(row, 5)
+            if widget is None:
+                continue
+            cell = table.visualRect(table.model().index(row, 5))
+            if not cell.isValid():
+                continue
+            parent = widget.parentWidget()
+            if parent is table.viewport():
+                widget.setGeometry(cell)
+            elif parent is not None:
+                origin = table.viewport().mapToGlobal(cell.topLeft())
+                widget.setGeometry(QRect(parent.mapFromGlobal(origin),
+                                         cell.size()))
+
+    def showEvent(self, event):
+        """Réaligne les statuts après l'affichage (re-centrage Qt)."""
+        super().showEvent(event)
+        self._sync_status_widgets()
+        QTimer.singleShot(0, self._sync_status_widgets)
+
+    def resizeEvent(self, event):
+        """Réaligne les statuts après un redimensionnement (re-centrage Qt)."""
+        super().resizeEvent(event)
+        self._sync_status_widgets()
+        QTimer.singleShot(0, self._sync_status_widgets)
 
     def _selected_payment(self):
         row = self.table.currentRow()
@@ -363,8 +421,6 @@ class StudentDetailsDialog(QDialog):
             f"<p><b>Solde restant après paiement :</b> "
             f"{s['balance']['after_formatted']}</p>",
         )
-        # Le reçu vient d'être consulté : proposer directement le PDF
-        self.download_receipt()
 
     def download_receipt(self):
         """Exporte le reçu PDF à l'emplacement choisi par l'utilisateur."""
@@ -424,8 +480,6 @@ class StudentDetailsDialog(QDialog):
         """Déplace l'élève vers une autre classe (liste de l'année courante)."""
         if not self.student:
             return
-        from PySide6.QtWidgets import QInputDialog
-
         classes = self.student_service.get_all_classes()  # année courante
         others = [c for c in classes if c.id != self.student.class_id]
         if not others:
@@ -434,11 +488,11 @@ class StudentDetailsDialog(QDialog):
                 "Créez d'abord une autre classe dans la page « Classes ».")
             return
 
-        name, ok = QInputDialog.getItem(
+        name, ok = self._french_input_dialog(
             self, "Déplacer l'élève",
             f"Nouvelle classe pour {self.student.first_name} "
             f"{self.student.last_name} :",
-            [c.name for c in others], 0, False)
+            [c.name for c in others], editable=False)
         if not ok:
             return
         target = next((c for c in others if c.name == name), None)
@@ -481,16 +535,13 @@ class StudentDetailsDialog(QDialog):
         payment = self._selected_payment()
         if not payment:
             return
-        reply = QMessageBox.question(
-            self, "Confirmer la suppression",
-            f"Supprimer DÉFINITIVEMENT le paiement {payment.receipt_no} "
-            f"({self._fmt(payment.paid_on)}) ?\n\n"
-            "Le numéro de reçu ne sera pas réutilisé et le reçu ne sera "
-            "plus consultable. Pour garder une trace, préférez « Annuler "
-            "ce paiement… ».",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No)
-        if reply != QMessageBox.StandardButton.Yes:
+        if not ask_yes_no(
+                self, "Confirmer la suppression",
+                f"Supprimer DÉFINITIVEMENT le paiement {payment.receipt_no} "
+                f"({self._fmt(payment.paid_on)}) ?\n\n"
+                "Le numéro de reçu ne sera pas réutilisé et le reçu ne sera "
+                "plus consultable. Pour garder une trace, préférez « Annuler "
+                "ce paiement… »."):
             return
         try:
             self.payment_service.delete_payment(payment.id)
@@ -498,7 +549,7 @@ class StudentDetailsDialog(QDialog):
             QMessageBox.critical(self, "Suppression impossible", str(e))
             return
         QMessageBox.information(self, "Paiement supprimé",
-                                "Le paiement a été supprimé.")
+                                "Le paiement a été supprimé avec succès.")
         self.reload()
         if self.on_changed:
             self.on_changed()
@@ -508,10 +559,9 @@ class StudentDetailsDialog(QDialog):
         payment = self._selected_payment()
         if not payment:
             return
-        from PySide6.QtWidgets import QInputDialog
-        reason, ok = QInputDialog.getItem(
+        reason, ok = self._french_input_dialog(
             self, "Annuler le paiement",
-            "Motif d'annulation :", CANCEL_REASONS, 0, True)
+            "Motif d'annulation :", CANCEL_REASONS, editable=True)
         if not ok:
             return
         try:
@@ -534,3 +584,30 @@ class StudentDetailsDialog(QDialog):
             return f"{d}/{m}/{y}"
         except ValueError:
             return str(date_str)
+
+    @staticmethod
+    def _french_input_dialog(parent, title: str, label: str, items,
+                             editable: bool = False):
+        """
+        QInputDialog de liste avec boutons français (OK / Annuler).
+
+        La version statique QInputDialog.getItem affiche les libellés
+        natifs en anglais (« Cancel ») : on force des libellés français
+        via setOkButtonText / setCancelButtonText.
+
+        Returns:
+            (texte sélectionné, accepté)
+        """
+        from PySide6.QtWidgets import QInputDialog
+
+        dlg = QInputDialog(parent)
+        dlg.setWindowTitle(title)
+        dlg.setLabelText(label)
+        dlg.setComboBoxItems(list(items))
+        dlg.setComboBoxEditable(editable)
+        # Les libellés natifs sont en anglais (OK / Cancel)
+        dlg.setOkButtonText("OK")
+        dlg.setCancelButtonText("Annuler")
+
+        accepted = dlg.exec() == QDialog.DialogCode.Accepted
+        return dlg.textValue(), accepted
