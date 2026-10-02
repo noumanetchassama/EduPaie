@@ -9,7 +9,6 @@ exactement le même document, même si l'élève ou ses tarifs ont changé.
 import os
 import subprocess
 import sys
-import tempfile
 from typing import Optional
 
 from reportlab.lib import colors
@@ -27,7 +26,7 @@ from reportlab.platypus import (
 )
 
 from app.config import RECEIPTS_FOLDER
-from app.services.exceptions import NotFoundError, ValidationError
+from app.services.exceptions import NotFoundError
 
 PRIMARY = colors.HexColor("#2c5282")
 PRIMARY_LIGHT = colors.HexColor("#4299e1")
