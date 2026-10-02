@@ -96,6 +96,43 @@ class TestStudents:
         s = make_student(student_service, name="Roux", first="Manon")
         assert student_service.delete_student(s.id) is True
 
+    def test_count_payments(self, services):
+        student_service, payment_service, _ = services
+        s = make_student(student_service, name="Compteur", first="Ana")
+        assert student_service.count_payments(s.id) == 0
+        payment_service.create_payment(
+            student_id=s.id, amount_euros=2000,
+            paid_on="2025-06-01", method="especes")
+        assert student_service.count_payments(s.id) == 1
+
+    def test_archive_student_keeps_history(self, services):
+        """Un élève payé est archivé : retiré des listes, reçus conservés."""
+        student_service, payment_service, _ = services
+        s = make_student(student_service, name="Archivé", first="Zoé")
+        payment_service.create_payment(
+            student_id=s.id, amount_euros=3000,
+            paid_on="2025-06-01", method="especes")
+
+        assert student_service.archive_student(s.id) is True
+        assert student_service.get_student(s.id).is_active is False
+        assert student_service.archive_student(s.id) is False  # déjà archivé
+
+        # L'historique financier est intouché…
+        assert student_service.count_payments(s.id) == 1
+        # …mais l'élève disparaît de la liste / du tableau de bord
+        overview = payment_service.get_overview()
+        assert all(r["student"].id != s.id for r in overview["students"])
+        # La suppression physique reste interdite tant que des paiements existent
+        with pytest.raises(BusinessRuleError):
+            student_service.delete_student(s.id)
+
+    def test_archive_audited(self, services):
+        student_service, _, _ = services
+        s = make_student(student_service, name="Tracé", first="Lou")
+        student_service.archive_student(s.id)
+        entries = AuditRepository().get_all(entity="Élève", action="Archivage")
+        assert any("Lou" in (e["entity_label"] or "") for e in entries)
+
 
 # ======================================================================
 # Soldes et statuts
@@ -325,14 +362,36 @@ class TestClasses:
         info = balance_service.get_balance_info(s.id, year.id)
         assert info["total_due_int"] == 65000
 
-    def test_delete_class_with_students_refused(self, services):
-        student_service, _, _ = services
+    def test_delete_class_with_paying_students_refused(self, services):
+        """Classe refusée dès qu'un élève a des paiements (reçus conservés)."""
+        student_service, payment_service, _ = services
         class_service = ClassService(student_service=student_service)
         c = class_service.create_class("3ème Z", "3ème", 65000)
-        student_service.create_student(
+        s = student_service.create_student(
             last_name="Test", first_name="Classe", class_id=c.id)
+        payment_service.create_payment(
+            student_id=s.id, amount_euros=1000,
+            paid_on="2025-06-01", method="especes")
         with pytest.raises(BusinessRuleError):
             class_service.delete_class(c.id)
+        # Rien n'a été supprimé
+        assert student_service.get_student(s.id) is not None
+        assert class_service.get_class(c.id) is not None
+
+    def test_delete_class_cascades_students_without_payments(self, services):
+        """Des élèves sans paiement sont supprimés avec leur classe."""
+        student_service, _, _ = services
+        class_service = ClassService(student_service=student_service)
+        c = class_service.create_class("3ème Y", "3ème", 65000)
+        s1 = student_service.create_student(
+            last_name="Cascade", first_name="Non", class_id=c.id)
+        s2 = student_service.create_student(
+            last_name="Cascade", first_name="Deux", class_id=c.id)
+        assert class_service.delete_class(c.id) is True
+        assert student_service.get_student(s1.id) is None
+        assert student_service.get_student(s2.id) is None
+        with pytest.raises(NotFoundError):
+            class_service.get_class(c.id)
 
     def test_delete_empty_class(self, services):
         student_service, _, _ = services
