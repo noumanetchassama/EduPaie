@@ -18,7 +18,7 @@ from pathlib import Path
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 # Configuration (chemins, monnaie, école)
-from app.config import DB_PATH, LOG_FILE, SEED_DB_PATH
+from app import DB_PATH, LOG_FILE, SEED_DB_PATH
 
 
 def setup_logging():
