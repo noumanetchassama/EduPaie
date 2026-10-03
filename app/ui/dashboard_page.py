@@ -31,9 +31,10 @@ from app.ui.widgets import (
     FlowLayout,
     PageHeader,
     StatCard,
+    StatusBadge,
     make_button,
     make_card,
-    make_status_badge_cell,
+    short_status,
 )
 
 STATUS_FILTERS = {
@@ -242,8 +243,7 @@ class DashboardPage(QWidget):
                                        if r[key] == 0 else Qt.GlobalColor.red)
                 self.table.setItem(i, col, cell)
 
-            self.table.setCellWidget(
-                i, 6, make_status_badge_cell(r["status"]))
+            self.table.setCellWidget(i, 6, StatusBadge(short_status(r["status"])))
 
         # Ajuster la hauteur des lignes pour les badges de statut
         for row in range(self.table.rowCount()):

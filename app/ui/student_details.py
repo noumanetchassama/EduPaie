@@ -31,7 +31,6 @@ from app.ui.widgets import (
     ask_yes_no,
     make_button,
     make_card,
-    make_status_badge_cell,
 )
 
 CANCEL_REASONS = [
@@ -322,9 +321,12 @@ class StudentDetailsDialog(QDialog):
 
         # 2) Installer les widgets de statut dans des cellules déjà dimensionnées…
         for row, p in enumerate(display):
-            payment_status = "Valide" if p.is_valid else "Annulé"
-            self.table.setCellWidget(
-                row, 5, make_status_badge_cell(payment_status))
+            status_widget = QWidget()
+            lay = QHBoxLayout(status_widget)
+            lay.setContentsMargins(8, 4, 8, 4)
+            badge = StatusBadge("Valide" if p.is_valid else "Annulé")
+            lay.addWidget(badge)
+            self.table.setCellWidget(row, 5, status_widget)
 
         # 3) …puis ré-appliquer la géométrie : Qt dimensionne le cell widget
         #    à son sizeHint du moment de l'insertion (avant polissage du style)

@@ -30,10 +30,11 @@ from app.ui.widgets import (
     COLOR_TEXT_SECONDARY,
     FlowLayout,
     PageHeader,
+    StatusBadge,
     ask_yes_no,
     make_button,
     make_card,
-    make_status_badge_cell,
+    short_status,
 )
 
 STATUS_FILTERS = {
@@ -297,8 +298,9 @@ class StudentsPage(QWidget):
                                        if r[key] == 0 else Qt.GlobalColor.red)
                 self.table.setItem(i, col, cell)
 
-            self.table.setCellWidget(
-                i, 7, make_status_badge_cell(r["status"]))
+            badge = StatusBadge(short_status(r["status"]))
+            badge.setToolTip(r["status"])
+            self.table.setCellWidget(i, 7, badge)
 
         # Sélectionner automatiquement la 1re ligne (ou l'ancienne) : les
         # boutons d'action sont donc cliquables immédiatement.
