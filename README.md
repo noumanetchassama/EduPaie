@@ -95,6 +95,12 @@ GitHub Actions exécute automatiquement cette suite sur Windows lors des push et
 python build.py    # produit dist/EduPaie.exe (schéma SQL embarqué)
 ```
 
+`build/` et `dist/` contiennent des fichiers générés et ne sont pas suivis par Git. Pour publier l'exécutable, poussez un tag de version (`v1.0.0`) : le workflow Windows exécute les tests, construit l'application et joint `EduPaie.exe` à une GitHub Release.
+
+## Branches de travail
+
+`main` contient la version intégrée. Créez une branche `feature/<nom>` ou `fix/<nom>` depuis `main` pour chaque nouvelle fonctionnalité ou correction, puis ouvrez une pull request vers `main`. La branche affichée dans VS Code est uniquement celle actuellement active; les autres sont accessibles depuis le sélecteur de branches.
+
 ## Auteur
 
 Projet pédagogique EduPaie — gestion des paiements scolaires.
