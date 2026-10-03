@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLayout,
     QPushButton,
     QSizePolicy,
+    QWidget,
     QVBoxLayout,
 )
 
@@ -94,11 +95,11 @@ COLOR_SURFACE_WHITE = "#ffffff"
 
 def status_colors(status: str):
     """Retourne (couleur texte, couleur fond) associées à un statut de paiement."""
-    if status == "Soldé":
+    if status in ("Soldé", "Valide"):
         return COLOR_SUCCESS, "#d4edda"
     if status == "Partiellement payé":
         return COLOR_WARNING, "#fff3cd"
-    if status == "Non payé":
+    if status in ("Non payé", "Annulé"):
         return COLOR_DANGER, "#f8d7da"
     if status == "En retard":
         return COLOR_DANGER, "#f8d7da"
@@ -134,16 +135,30 @@ class StatusBadge(QLabel):
             QLabel {{
                 color: {fg};
                 background-color: {bg};
-                border-radius: 12px;
-                padding: 6px 18px;
+                border-radius: 8px;
+                padding: 4px 10px;
                 font-weight: 600;
-                font-size: 10pt;
+                font-size: 9pt;
                 border: 1px solid {fg};
             }}
             """
         )
-        self.setMinimumWidth(100)
-        self.setMinimumHeight(30)
+        self.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        self.setMinimumWidth(0)
+        self.setMinimumHeight(26)
+
+
+def make_status_badge_cell(status: str, label: str = None) -> QWidget:
+    """Centre un badge compact dans une cellule de tableau."""
+    badge = StatusBadge(label if label is not None else short_status(status))
+    badge.setToolTip(status)
+
+    cell = QWidget()
+    layout = QHBoxLayout(cell)
+    layout.setContentsMargins(4, 3, 4, 3)
+    layout.setSpacing(0)
+    layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignCenter)
+    return cell
 
 
 class StatCard(QFrame):
