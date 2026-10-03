@@ -20,7 +20,8 @@ Application desktop de gestion des paiements de scolarité (monnaie : **FCFA**),
 - **Tableau de bord** : nombre d'élèves, total encaissé, total restant dû, élèves non soldés, répartition par statut et liste filtrable.
 - **Classes** : de la 6ème à la Terminale, séries A et D (14 classes par défaut, montants FCFA par classe).
 - **Interface responsive** : barre latérale repliable (auto sous 950 px), barres de filtres et d'actions qui se réorganisent en plusieurs lignes selon la largeur de la fenêtre.
-- **Robustesse** : argent stocké en **entiers (centimes)** — pas d'erreurs d'arrondi ; transactions SQLite explicites ; schéma auto-migré au démarrage.
+- **Robustesse** : montants stockés en **unités entières FCFA** (sans sous-unité) ; transactions SQLite explicites ; schéma auto-migré au démarrage.
+- **Sauvegardes** : copie quotidienne de la base avant initialisation/migration, avec conservation des 14 dernières sauvegardes.
 
 ## Démarrage rapide
 
@@ -28,10 +29,11 @@ Application desktop de gestion des paiements de scolarité (monnaie : **FCFA**),
 pip install -r requirements.txt
 python main.py                 # lance l'application
 python generate_test_data.py   # (optionnel) 15 élèves de démonstration
-python data/seed.py            # (optionnel) régénère la DB embarquée
 ```
 
-Au premier lancement, la base est créée dans `%APPDATA%/EduPaie` (Windows) ou `~/.config/EduPaie` (Linux/macOS), avec classes et plans de frais par défaut. Les reçus PDF sont enregistrés dans `~/Documents/EduPaie/Recus`.
+Au premier lancement, la base est créée dans `%APPDATA%/EduPaie` (Windows) ou `~/.config/EduPaie` (Linux/macOS), avec les classes et plans de frais par défaut. Le projet ne fournit pas de base de démonstration préremplie. Les reçus PDF sont enregistrés dans `~/Documents/EduPaie/Recus`.
+
+Les sauvegardes sont enregistrées dans le sous-dossier `backups` à côté de la base. Avec le chemin par défaut, elles se trouvent dans `%APPDATA%/EduPaie/backups` sous Windows.
 
 > Astuce : la variable d'environnement `EDUPAIE_DB` permet de pointer vers une autre base (utilisé par les tests).
 
@@ -83,12 +85,14 @@ L'onglet **Tableau de bord** affiche les cartes (élèves, encaissé, restant d�
 python -m pytest tests/ -v
 ```
 
-38 tests couvrent : CRUD élèves, matricules dupliqués, validations (nom, montants, dates, modes), statuts (non payé → partiel → soldé), dépassement de solde refusé, annulation avec restauration du solde, séquence de numéros de reçus, immutabilité des snapshots, génération PDF, **journal d'audit**, **déplacement d'élève** et **années scolaires multi-années**.
+La suite couvre : CRUD élèves, matricules dupliqués, validations (nom, montants, dates, modes), statuts (non payé → partiel → soldé), dépassement de solde refusé, annulation avec restauration du solde, séquence de numéros de reçus, immutabilité des snapshots, génération PDF, **sauvegarde de base**, **journal d'audit**, **déplacement d'élève** et **années scolaires multi-années**.
+
+GitHub Actions exécute automatiquement cette suite sur Windows lors des push et pull requests.
 
 ## Packaging (Windows)
 
 ```bash
-python build.py    # produit dist/EduPaie.exe (DB seed et schéma embarqués)
+python build.py    # produit dist/EduPaie.exe (schéma SQL embarqué)
 ```
 
 ## Auteur

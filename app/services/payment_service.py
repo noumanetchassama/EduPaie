@@ -10,6 +10,7 @@ Fonctionnalités :
 """
 
 from datetime import date, datetime
+import math
 from typing import List, Optional
 
 from app.config import format_euros
@@ -110,7 +111,7 @@ class PaymentService:
             amount_euros = float(str(amount_euros).replace(",", "."))
         except (TypeError, ValueError):
             raise ValidationError("Montant invalide")
-        if amount_euros <= 0:
+        if not math.isfinite(amount_euros) or amount_euros <= 0:
             raise ValidationError("Le montant doit être strictement positif")
 
         amount_int = int(round(amount_euros))  # FCFA entiers
@@ -235,7 +236,7 @@ class PaymentService:
 
     def _build_receipt_snapshot(self, student, school_year, amount_int, paid_on,
                                 method, reference, receipt_no,
-                                balance_before=None) -> dict:
+                                balance_before=None, class_name=None) -> dict:
         """
         Construit le dictionnaire du snapshot du reçu (figé à l'émission).
 
@@ -246,8 +247,9 @@ class PaymentService:
         """
         from app.config import SCHOOL_ADDRESS, SCHOOL_EMAIL, SCHOOL_NAME, SCHOOL_PHONE
 
-        class_obj = self.class_repo.get_by_id(student.class_id)
-        class_name = class_obj.name if class_obj else "Classe inconnue"
+        if class_name is None:
+            class_obj = self.class_repo.get_by_id(student.class_id)
+            class_name = class_obj.name if class_obj else "Classe inconnue"
 
         if balance_before is None:
             balance_before = self.balance_service.get_balance(
@@ -322,14 +324,12 @@ class PaymentService:
         if not student:
             raise NotFoundError(f"Élève introuvable (ID: {payment.student_id})")
 
-        school_year = self.student_service.get_current_school_year()
-
         # Validations identiques à la création
         try:
             amount_euros = float(str(amount_euros).replace(",", "."))
         except (TypeError, ValueError):
             raise ValidationError("Montant invalide")
-        if amount_euros <= 0:
+        if not math.isfinite(amount_euros) or amount_euros <= 0:
             raise ValidationError("Le montant doit être strictement positif")
         amount_int = int(round(amount_euros))
 
@@ -345,10 +345,13 @@ class PaymentService:
 
         # Solde en excluant le paiement en cours de modification
         year = self.school_year_repo.get_by_id(payment.school_year_id)
+        class_for_year = self.student_service.get_class_for_year(
+            student, payment.school_year_id)
         other_paid = self.payment_repo.get_total_by_student(
             payment.student_id, payment.school_year_id)
-        balance_before = self.fee_plan_repo.get_total_by_class(
-            student.class_id, payment.school_year_id) - (other_paid - payment.amount_int)
+        total_due = (self.fee_plan_repo.get_total_by_class(
+            class_for_year.id, payment.school_year_id) if class_for_year else 0)
+        balance_before = total_due - (other_paid - payment.amount_int)
         if amount_int > balance_before:
             raise BusinessRuleError(
                 f"Le montant ({format_euros(amount_int)}) dépasserait le solde "
@@ -365,7 +368,9 @@ class PaymentService:
         }
         snapshot = self._build_receipt_snapshot(
             student, year, amount_int, paid_on, method, reference,
-            payment.receipt_no, balance_before=balance_before)
+            payment.receipt_no, balance_before=balance_before,
+            class_name=(class_for_year.name if class_for_year
+                        else "Classe inconnue"))
         payment.amount_int = amount_int
         payment.paid_on = paid_on
         payment.method = method

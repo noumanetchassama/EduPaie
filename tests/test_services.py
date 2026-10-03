@@ -6,6 +6,7 @@ Chaque test tourne sur une base SQLite temporaire isolée
 """
 
 import sys
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -190,6 +191,23 @@ class TestPayments:
                     student_id=s.id, amount_euros=bad,
                     paid_on="2025-06-01", method="especes")
 
+    def test_non_finite_amount_refused_on_create_and_update(self, services):
+        student_service, payment_service, _ = services
+        s = make_student(student_service, name="Montant", first="Invalide")
+        payment = payment_service.create_payment(
+            student_id=s.id, amount_euros=1000,
+            paid_on="2025-06-01", method="especes")
+
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            with pytest.raises(ValidationError):
+                payment_service.create_payment(
+                    student_id=s.id, amount_euros=bad,
+                    paid_on="2025-06-02", method="especes")
+            with pytest.raises(ValidationError):
+                payment_service.update_payment(
+                    payment_id=payment.id, amount_euros=bad,
+                    paid_on="2025-06-02", method="especes")
+
     def test_future_date_refused(self, services):
         student_service, payment_service, _ = services
         s = make_student(student_service, name="Simon", first="Hugo")
@@ -315,6 +333,29 @@ class TestReceipts:
             payment_service.update_payment(
                 payment_id=p.id, amount_euros=9999999,
                 paid_on="2025-06-02", method="especes")
+
+    def test_update_historical_payment_uses_year_class(self, services):
+        """Une classe d'une nouvelle année ne doit pas bloquer l'ancien reçu."""
+        student_service, payment_service, _ = services
+        s = make_student(student_service, name="Historique", first="Maya")
+        payment = payment_service.create_payment(
+            student_id=s.id, amount_euros=10000,
+            paid_on="2025-06-01", method="especes")
+
+        year = SchoolYearService(student_service=student_service).create_school_year(
+            "2094-2095")
+        next_class = next(
+            c for c in student_service.get_all_classes(year.id)
+            if c.name == "5ème A")
+        student_service.move_student(s.id, next_class.id)
+
+        updated = payment_service.update_payment(
+            payment_id=payment.id, amount_euros=15000,
+            paid_on="2025-06-02", method="cheque")
+
+        assert updated.amount_int == 15000
+        snapshot = payment_service.get_payment_snapshot(payment.id)
+        assert snapshot["student"]["class"] == "5ème A"
 
     def test_delete_payment_removes_it(self, services):
         """Suppression définitive d'un paiement."""
@@ -601,3 +642,21 @@ class TestSchoolYears:
         # Retour à l'année d'origine pour ne pas perturber les autres tests
         others = [y for y in school_year_service.get_all() if y.id != year.id]
         school_year_service.set_current_year(others[0].id)
+
+
+class TestDatabaseBackups:
+    def test_existing_database_is_backed_up_before_initialization(self, db):
+        connection = db.get_connection()
+        connection.execute("CREATE TABLE backup_probe (value TEXT NOT NULL)")
+        connection.execute("INSERT INTO backup_probe VALUES ('preserve me')")
+        connection.commit()
+
+        db.initialize_schema()
+
+        backup_dir = db._db_path.parent / "backups"
+        backups = list(backup_dir.glob(f"{db._db_path.stem}_????????.sqlite3"))
+        assert len(backups) == 1
+        with sqlite3.connect(backups[0]) as backup_connection:
+            row = backup_connection.execute(
+                "SELECT value FROM backup_probe").fetchone()
+        assert row == ("preserve me",)

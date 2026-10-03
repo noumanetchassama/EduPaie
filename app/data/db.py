@@ -10,6 +10,7 @@ Fonctionnalités :
 
 import logging
 import sqlite3
+from datetime import date
 from pathlib import Path
 from contextlib import contextmanager
 
@@ -109,6 +110,7 @@ class Database:
 
         conn = self.get_connection()
         cursor = conn.cursor()
+        self._backup_existing_database(conn)
 
         # Détection AVANT l'exécution du schéma : une base « legacy » en
         # euros (montants stockés en centimes) doit être convertie en FCFA.
@@ -137,6 +139,48 @@ class Database:
         cursor.execute(
             "INSERT OR REPLACE INTO meta (key, value) VALUES ('fcfa_v2', '1')")
         conn.commit()
+
+    def _backup_existing_database(self, conn):
+        """Crée une sauvegarde quotidienne avant toute modification du schéma."""
+        existing_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name NOT LIKE 'sqlite_%' LIMIT 1"
+        ).fetchone()
+        if existing_table is None:
+            return
+
+        backup_dir = self._db_path.parent / "backups"
+        backup_path = backup_dir / (
+            f"{self._db_path.stem}_{date.today():%Y%m%d}.sqlite3")
+        temp_path = backup_path.with_name(f".{backup_path.name}.tmp")
+
+        try:
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            if not backup_path.exists():
+                backup_connection = sqlite3.connect(str(temp_path))
+                try:
+                    conn.backup(backup_connection)
+                finally:
+                    backup_connection.close()
+                temp_path.replace(backup_path)
+                logging.info("Sauvegarde de la base créée : %s", backup_path)
+        except Exception:
+            logging.exception("Impossible de sauvegarder la base : %s", self._db_path)
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
+
+        backups = sorted(
+            backup_dir.glob(f"{self._db_path.stem}_????????.sqlite3"),
+            reverse=True,
+        )
+        for obsolete in backups[14:]:
+            try:
+                obsolete.unlink()
+            except OSError:
+                logging.warning("Impossible de supprimer l'ancienne sauvegarde : %s",
+                                obsolete)
 
     @staticmethod
     def _detect_legacy_euro(cursor) -> bool:

@@ -3,12 +3,15 @@ Tableau de bord : vue d'ensemble (élèves, encaissé, restant dû, non soldés)
 et liste des élèves filtrable par statut de paiement.
 """
 
+import logging
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMessageBox,
     QStyle,
     QTableWidget,
     QTableWidgetItem,
@@ -155,7 +158,7 @@ class DashboardPage(QWidget):
         self.table.doubleClicked.connect(self._open_selected)
         layout.addWidget(self.table, 1)
 
-        hint = QLabel("💡 Astuce : double-cliquez sur un élève pour ouvrir sa fiche "
+        hint = QLabel("Astuce : double-cliquez sur un élève pour ouvrir sa fiche "
                       "et consulter l'historique de ses paiements.")
         hint.setStyleSheet(f"color: {COLOR_TEXT_SECONDARY}; font-size: 10pt; font-style: italic; font-weight: 500;")
         layout.addWidget(hint)
@@ -174,7 +177,14 @@ class DashboardPage(QWidget):
         try:
             self._overview = self.payment_service.get_overview(school_year_id)
         except Exception:
+            logging.exception("Échec de l'actualisation du tableau de bord")
             self._overview = None
+            QMessageBox.warning(
+                self,
+                "Actualisation impossible",
+                "Les données du tableau de bord n'ont pas pu être actualisées. "
+                "Les chiffres affichés peuvent être anciens.",
+            )
             return
 
         o = self._overview
