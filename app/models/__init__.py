@@ -1,3 +1,0 @@
-"""
-Modèles de données de l'application EduPaie
-"""
