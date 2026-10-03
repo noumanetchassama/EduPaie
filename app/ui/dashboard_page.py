@@ -3,19 +3,12 @@ Tableau de bord : vue d'ensemble (élèves, encaissé, restant dû, non soldés)
 et liste des élèves filtrable par statut de paiement.
 """
 
-from io import BytesIO
-
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
-    QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
-    QScrollArea,
     QStyle,
     QTableWidget,
     QTableWidgetItem,
@@ -95,83 +88,6 @@ class DashboardPage(QWidget):
             cards.addWidget(card)
         layout.addWidget(cards_container)
 
-        # ---- Section graphiques et statistiques financières ----
-        graphs_section = QFrame()
-        graphs_section.setStyleSheet(
-            f"""
-            QFrame {{
-                background-color: {COLOR_PRIMARY};
-                border-radius: 14px;
-                border: 2px solid {COLOR_PRIMARY};
-            }}
-            """
-        )
-        graphs_layout = QHBoxLayout(graphs_section)
-        graphs_layout.setContentsMargins(18, 18, 18, 18)
-        graphs_layout.setSpacing(18)
-
-        # Carte de résumé financier (style de l'image)
-        summary_card = QFrame()
-        summary_card.setStyleSheet(
-            f"""
-            QFrame {{
-                background-color: rgba(255, 255, 255, 0.15);
-                border-radius: 12px;
-                border: 1px solid rgba(255, 255, 255, 0.3);
-            }}
-            """
-        )
-        summary_layout = QVBoxLayout(summary_card)
-        summary_layout.setContentsMargins(16, 16, 16, 16)
-        summary_layout.setSpacing(8)
-
-        summary_title = QLabel("Résumé financier")
-        summary_title.setStyleSheet(
-            "color: #ffffff; font-size: 13pt; font-weight: 700; background: transparent;"
-        )
-        summary_layout.addWidget(summary_title)
-
-        self.summary_students = QLabel("0 Élèves")
-        self.summary_students.setStyleSheet(
-            "color: rgba(255, 255, 255, 0.95); font-size: 11pt; font-weight: 600; background: transparent;"
-        )
-        summary_layout.addWidget(self.summary_students)
-
-        self.summary_classes = QLabel("0 Classes")
-        self.summary_classes.setStyleSheet(
-            "color: rgba(255, 255, 255, 0.95); font-size: 11pt; font-weight: 600; background: transparent;"
-        )
-        summary_layout.addWidget(self.summary_classes)
-
-        self.summary_payments = QLabel("0 Paiements")
-        self.summary_payments.setStyleSheet(
-            "color: rgba(255, 255, 255, 0.95); font-size: 11pt; font-weight: 600; background: transparent;"
-        )
-        summary_layout.addWidget(self.summary_payments)
-
-        self.summary_amount = QLabel("0 FCFA consommés")
-        self.summary_amount.setStyleSheet(
-            "color: rgba(255, 255, 255, 0.95); font-size: 11pt; font-weight: 600; background: transparent;"
-        )
-        summary_layout.addWidget(self.summary_amount)
-
-        summary_layout.addStretch()
-        graphs_layout.addWidget(summary_card, 1)
-
-        # Graphique circulaire de répartition par statut
-        self.pie_chart_label = QLabel()
-        self.pie_chart_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.pie_chart_label.setStyleSheet("background: transparent;")
-        graphs_layout.addWidget(self.pie_chart_label, 2)
-
-        # Graphique barre des paiements mensuels
-        self.bar_chart_label = QLabel()
-        self.bar_chart_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.bar_chart_label.setStyleSheet("background: transparent;")
-        graphs_layout.addWidget(self.bar_chart_label, 2)
-
-        layout.addWidget(graphs_section)
-
         # ---- Répartition par statut ----
         breakdown = QHBoxLayout()
         breakdown.setSpacing(18)
@@ -214,10 +130,25 @@ class DashboardPage(QWidget):
         self.table.setStyleSheet(
             """
             QTableWidget {
-                font-size: 10pt;
+                font-size: 11pt;
+                font-weight: 500;
             }
             QTableWidget::item {
-                padding: 8px;
+                padding: 12px;
+                border-bottom: 1px solid #e2e8f0;
+            }
+            QTableWidget::item:selected {
+                background-color: #2c5282;
+                color: #ffffff;
+            }
+            QHeaderView::section {
+                font-size: 11pt;
+                font-weight: 700;
+                padding: 14px;
+                background-color: #2c5282;
+                color: #ffffff;
+                border: none;
+                border-right: 1px solid #1a365d;
             }
             """
         )
@@ -270,17 +201,6 @@ class DashboardPage(QWidget):
             f"● <b style='color:{COLOR_DANGER};'>Non payés :</b> "
             f"{o['nb_unpaid']} ({o['nb_unpaid'] * 100 // total} %)")
 
-        # Mise à jour du résumé financier
-        classes = self.student_service.get_all_classes()
-        self.summary_students.setText(f"{o['nb_students']} Élèves")
-        self.summary_classes.setText(f"{len(classes)} Classes")
-        self.summary_payments.setText(f"{o['nb_paid'] + o['nb_partial']} Paiements")
-        self.summary_amount.setText(f"{format_euros(o['total_paid_int'])} consommés")
-
-        # Génération des graphiques
-        self._generate_pie_chart(o)
-        self._generate_bar_chart(o)
-
         self._apply_filter()
 
     def _apply_filter(self):
@@ -326,72 +246,3 @@ class DashboardPage(QWidget):
         student_id = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
         if student_id:
             self.on_open_student(student_id)
-
-    def _generate_pie_chart(self, overview):
-        """Génère un graphique circulaire de la répartition par statut."""
-        try:
-            fig = Figure(figsize=(4, 3), dpi=100)
-            ax = fig.add_subplot(111)
-
-            labels = ['Soldés', 'Partiels', 'Non payés']
-            sizes = [overview['nb_paid'], overview['nb_partial'], overview['nb_unpaid']]
-            colors = [COLOR_SUCCESS, COLOR_WARNING, COLOR_DANGER]
-
-            # Éviter les segments vides
-            if sum(sizes) == 0:
-                sizes = [1]
-                labels = ['Aucun']
-                colors = [COLOR_TEXT_SECONDARY]
-
-            wedges, texts, autotexts = ax.pie(
-                sizes, labels=labels, colors=colors, autopct='%1.1f%%',
-                startangle=90, textprops={'fontsize': 8, 'fontweight': 'bold'}
-            )
-
-            ax.set_aspect('equal')
-            fig.tight_layout()
-
-            canvas = FigureCanvas(fig)
-            buf = BytesIO()
-            canvas.print_png(buf)
-            buf.seek(0)
-            pixmap = QPixmap()
-            pixmap.loadFromData(buf.getvalue())
-            self.pie_chart_label.setPixmap(pixmap.scaled(300, 200, Qt.AspectRatioMode.KeepAspectRatio))
-        except Exception as e:
-            self.pie_chart_label.setText("Graphique non disponible")
-
-    def _generate_bar_chart(self, overview):
-        """Génère un graphique en barres des paiements par statut."""
-        try:
-            fig = Figure(figsize=(4, 3), dpi=100)
-            ax = fig.add_subplot(111)
-
-            labels = ['Soldés', 'Partiels', 'Non payés']
-            values = [overview['nb_paid'], overview['nb_partial'], overview['nb_unpaid']]
-            colors = [COLOR_SUCCESS, COLOR_WARNING, COLOR_DANGER]
-
-            bars = ax.bar(labels, values, color=colors, edgecolor='white', linewidth=1.5)
-            ax.set_ylabel('Nombre d\'élèves', fontsize=8, fontweight='bold')
-            ax.set_title('Répartition par statut', fontsize=9, fontweight='bold', pad=10)
-            ax.tick_params(axis='both', which='major', labelsize=7)
-
-            # Ajouter les valeurs au-dessus des barres
-            for bar in bars:
-                height = bar.get_height()
-                if height > 0:
-                    ax.text(bar.get_x() + bar.get_width()/2., height,
-                           f'{int(height)}',
-                           ha='center', va='bottom', fontsize=7, fontweight='bold')
-
-            fig.tight_layout()
-
-            canvas = FigureCanvas(fig)
-            buf = BytesIO()
-            canvas.print_png(buf)
-            buf.seek(0)
-            pixmap = QPixmap()
-            pixmap.loadFromData(buf.getvalue())
-            self.bar_chart_label.setPixmap(pixmap.scaled(300, 200, Qt.AspectRatioMode.KeepAspectRatio))
-        except Exception as e:
-            self.bar_chart_label.setText("Graphique non disponible")
