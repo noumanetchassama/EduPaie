@@ -70,7 +70,7 @@ Règles clés :
 ### Enregistrer un paiement
 1. Onglet **Élèves** → sélectionner un élève → **Enregistrer un paiement**
 2. Saisir le montant (un aperçu affiche le solde après paiement ; tout dépassement est refusé), la date, le mode
-3. Le reçu est généré automatiquement avec son numéro unique — disponible immédiatement dans la **fiche élève**
+3. Le  est généré automatiquement avec son numéro unique — disponible immédiatement dans la **fiche élève**
 
 ### Consulter / télécharger / imprimer un reçu
 1. **Élèves** → double-clic (ou **Voir la fiche**)
