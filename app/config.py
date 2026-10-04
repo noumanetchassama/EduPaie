@@ -113,10 +113,10 @@ CURRENCY_SUBUNIT = 1  # pas de centime en pratique
 CURRENCY_SUBUNIT_EUR = 1
 
 # Nom de l'école (personnalisable)
-SCHOOL_NAME = "Groupe Scolaire Exemple"
-SCHOOL_ADDRESS = "123 Rue de l'École"
-SCHOOL_PHONE = "01 23 45 67 89"
-SCHOOL_EMAIL = "contact@ecole-exemple.fr"
+SCHOOL_NAME = "ADN Golfe1"
+SCHOOL_ADDRESS = "Adakpamey, Lomé, Togo"
+SCHOOL_PHONE = "93442688"
+SCHOOL_EMAIL = "contact@gmail.com"
 
 
 # ============================================================
