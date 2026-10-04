@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
         self.sidebar = QFrame()
         self.sidebar.setObjectName("sidebar")
         self._sidebar_width = 230
-        self._sidebar_collapsed_width = 58
+        self._sidebar_collapsed_width = 84
         self.sidebar.setFixedWidth(self._sidebar_width)
         self.sidebar.setStyleSheet(
             f"""
@@ -145,6 +145,7 @@ class MainWindow(QMainWindow):
             }}
             QPushButton#quitButton[collapsed="true"] {{
                 padding: 11px 0px;
+                font-size: 8.5pt;
                 text-align: center;
             }}
             QPushButton#quitButton:hover {{
@@ -295,9 +296,6 @@ class MainWindow(QMainWindow):
 
         self.quit_btn = QPushButton("Quitter")
         self.quit_btn.setObjectName("quitButton")
-        self.quit_btn.setIcon(self.style().standardIcon(
-            QStyle.StandardPixmap.SP_DialogCloseButton))
-        self.quit_btn.setIconSize(QSize(18, 18))
         self.quit_btn.setToolTip("Quitter EduPaie")
         self.quit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.quit_btn.clicked.connect(self.close)
@@ -367,7 +365,7 @@ class MainWindow(QMainWindow):
         self.year_caption.setVisible(expanded)
         self.year_combo.setVisible(expanded)
         self.year_add_btn.setVisible(expanded)
-        self.quit_btn.setText("Quitter" if expanded else "")
+        self.quit_btn.setText("Quitter" if expanded else "Quit.")
         self.quit_btn.setProperty("collapsed", not expanded)
         self.quit_btn.style().unpolish(self.quit_btn)
         self.quit_btn.style().polish(self.quit_btn)
