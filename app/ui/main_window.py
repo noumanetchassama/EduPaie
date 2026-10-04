@@ -133,6 +133,27 @@ class MainWindow(QMainWindow):
             QPushButton#sidebarToggle:hover {{
                 background-color: rgba(255,255,255,0.15);
             }}
+            QPushButton#quitButton {{
+                color: #fed7d7;
+                background-color: rgba(229,62,62,0.12);
+                border: 1px solid rgba(255,255,255,0.14);
+                border-radius: 8px;
+                padding: 11px 14px;
+                font-size: 11pt;
+                font-weight: 600;
+                text-align: left;
+            }}
+            QPushButton#quitButton[collapsed="true"] {{
+                padding: 11px 0px;
+                text-align: center;
+            }}
+            QPushButton#quitButton:hover {{
+                color: #ffffff;
+                background-color: rgba(229,62,62,0.75);
+            }}
+            QPushButton#quitButton:focus {{
+                border: 2px solid #feb2b2;
+            }}
             QScrollArea#navScroll {{
                 background: transparent;
                 border: none;
@@ -271,6 +292,17 @@ class MainWindow(QMainWindow):
         year_layout.addWidget(self.year_add_btn)
 
         sidebar_layout.addWidget(year_row)
+
+        self.quit_btn = QPushButton("Quitter")
+        self.quit_btn.setObjectName("quitButton")
+        self.quit_btn.setIcon(self.style().standardIcon(
+            QStyle.StandardPixmap.SP_DialogCloseButton))
+        self.quit_btn.setIconSize(QSize(18, 18))
+        self.quit_btn.setToolTip("Quitter EduPaie")
+        self.quit_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.quit_btn.clicked.connect(self.close)
+        sidebar_layout.addWidget(self.quit_btn)
+
         self._reload_year_combo()
 
         # ---- Zone de contenu ----
@@ -335,6 +367,10 @@ class MainWindow(QMainWindow):
         self.year_caption.setVisible(expanded)
         self.year_combo.setVisible(expanded)
         self.year_add_btn.setVisible(expanded)
+        self.quit_btn.setText("Quitter" if expanded else "")
+        self.quit_btn.setProperty("collapsed", not expanded)
+        self.quit_btn.style().unpolish(self.quit_btn)
+        self.quit_btn.style().polish(self.quit_btn)
         arrow = (QStyle.StandardPixmap.SP_ArrowLeft if expanded
                  else QStyle.StandardPixmap.SP_ArrowRight)
         self.toggle_btn.setIcon(self.style().standardIcon(arrow))
